@@ -2,6 +2,28 @@
 
 Running log of what the discrimination pilot has told us. Newest first.
 
+## Run 8 — flagship pair v2 (fable@medium vs gpt-5.6-sol@medium): 2-0 again
+
+`runs/flagship-fable-codex-v2/`. Rematch of the Run 3/4 pair, now with
+per-move commentary recorded. **Fable swept 2-0 again — cumulative
+head-to-head 4-0** — winning by center from both seats (9 plies as A;
+28 plies as B with real capture exchanges). Codex's error signature
+persisted (0.056 illegal/turn, 1 forfeited turn); Fable remains at zero
+errors across all games to date.
+
+Notable variance datum: the same matchup produced a 43-ply elimination
+war in Run 3 and a 9-ply center rush here — game-level outcomes swing
+widely even when the winner is stable. Supports the strategy doc's
+position that per-move metrics and multi-game samples, not single games,
+must carry the ratings.
+
+Commentary revealed a spectator-visible personality difference: Fable
+narrates its plans before each move ("Red has jumped straight into the
+center at (3,3) — the center-occupation threat and a capture opportunity
+both revolve around that square..."), while codex replies with the bare
+move JSON and nothing else. Same protocol, opposite communication
+styles — now visible per-move in the replay viewer.
+
 ## Run 7 — learning-vs-cold (fable@low, 4 games): modest edge, rich failure modes
 
 `runs/fable-low-learn-vs-cold/`. Both sides claude-fable-5@low. The only
