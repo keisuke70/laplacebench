@@ -34,6 +34,13 @@ interface BenchFailure {
   team: "A" | "B";
 }
 
+interface BenchCommentary {
+  ply: number;
+  team: "A" | "B";
+  color: string;
+  text: string;
+}
+
 interface BenchMeta {
   file: string;
   run_id: string;
@@ -46,6 +53,7 @@ interface BenchMeta {
   exported_at: string;
   stats?: { A: BenchTeamStats; B: BenchTeamStats };
   failures?: BenchFailure[];
+  commentary?: BenchCommentary[];
 }
 
 /**
@@ -75,8 +83,17 @@ export function exportGame(
   const manager = newGame();
   const history: object[] = [manager.getState() as unknown as object];
   const failures: BenchFailure[] = [];
+  const commentary: BenchCommentary[] = [];
 
   for (const e of events) {
+    if (e.t === "move" && typeof e.raw === "string" && e.raw.trim()) {
+      commentary.push({
+        ply: e.ply,
+        team: playerTeam(e.player),
+        color: COLOR_NAMES[e.player - 1],
+        text: e.raw.slice(0, 2500),
+      });
+    }
     if (e.t === "failure") {
       failures.push({
         ply: e.ply,
@@ -156,6 +173,7 @@ export function exportGame(
     exported_at: new Date().toISOString(),
     stats,
     failures,
+    commentary,
   };
 
   const payload = {
@@ -197,7 +215,8 @@ export function exportRun(runDir: string, outDir: string): BenchMeta[] {
     }
   }
   const byFile = new Map(index.map((m) => [m.file, m]));
-  for (const m of metas) byFile.set(m.file, m);
+  // Index entries stay light: commentary lives only in the game payload.
+  for (const m of metas) byFile.set(m.file, { ...m, commentary: undefined });
   const merged = [...byFile.values()].sort((a, b) =>
     a.exported_at < b.exported_at ? 1 : -1
   );

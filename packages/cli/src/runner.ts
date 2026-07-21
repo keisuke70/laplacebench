@@ -204,6 +204,9 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
         captures,
         eliminated,
         winner: res.state.winningTeam,
+        // The model's visible reply text — the "why" behind the move.
+        // Powers the spectator commentary view; bounded to keep logs sane.
+        raw: reply.raw?.slice(0, 4000),
       });
     }
 
