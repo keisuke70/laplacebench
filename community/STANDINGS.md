@@ -1,6 +1,6 @@
 # Community standings
 
-4 games across 2 runs. Regenerate with:
+4 games across 1 run(s). Regenerate with:
 `laplacebench standings community/runs/* --out community/STANDINGS.md`
 
 | agent | G | W | D | L | center | elim | err/turn |
