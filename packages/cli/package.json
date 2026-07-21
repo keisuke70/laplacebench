@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
-    "laplace-engine": "*"
+    "laplace-engine": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
