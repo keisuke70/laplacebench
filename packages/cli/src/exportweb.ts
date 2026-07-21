@@ -54,6 +54,8 @@ interface BenchMeta {
   stats?: { A: BenchTeamStats; B: BenchTeamStats };
   failures?: BenchFailure[];
   commentary?: BenchCommentary[];
+  /** Present when the run has a learning series: file with strategy-doc versions. */
+  learning_file?: string;
 }
 
 /**
@@ -202,6 +204,42 @@ export function exportRun(runDir: string, outDir: string): BenchMeta[] {
     );
     metas.push(meta);
     console.log(`exported + verified: ${meta.file} (${meta.plies} plies, winner ${meta.winner ?? "draw"} by ${meta.reason})`);
+  }
+
+  // Learning series: export the strategy-document versions so the web can
+  // show "watch it learn" (doc evolution game by game).
+  const learnDir = path.join(runDir, "learn");
+  if (fs.existsSync(learnDir)) {
+    const runId = path.basename(runDir);
+    const versions = fs
+      .readdirSync(learnDir)
+      .filter((f) => /^strategy-after-(.+)\.md$/.test(f))
+      .sort()
+      .map((f) => ({
+        after_game: f.replace(/^strategy-after-/, "").replace(/\.md$/, ""),
+        text: fs.readFileSync(path.join(learnDir, f), "utf8"),
+      }));
+    if (versions.length > 0) {
+      const learningFile = `${runId}--learning.json`;
+      fs.writeFileSync(
+        path.join(outDir, learningFile),
+        JSON.stringify({
+          run_id: runId,
+          games: metas.map((m) => ({
+            file: m.file,
+            game_id: m.game_id,
+            team_a: m.team_a,
+            team_b: m.team_b,
+            winner: m.winner,
+            reason: m.reason,
+            plies: m.plies,
+          })),
+          versions,
+        })
+      );
+      for (const m of metas) m.learning_file = learningFile;
+      console.log(`learning series exported: ${learningFile} (${versions.length} strategy versions)`);
+    }
   }
 
   // Merge into index.json (keyed by file name).
