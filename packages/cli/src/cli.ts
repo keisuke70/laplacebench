@@ -81,7 +81,8 @@ async function arena(args: Record<string, string | boolean>): Promise<void> {
   const runId =
     (args["run-id"] as string) ||
     new Date().toISOString().replace(/[:.]/g, "").slice(0, 15) + `-${specA}-vs-${specB}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const runDir = path.resolve(__dirname, "..", "runs", runId);
+  // Runs live under the caller's working directory, not the package install.
+  const runDir = path.resolve(process.cwd(), "runs", runId);
   fs.mkdirSync(runDir, { recursive: true });
 
   fs.writeFileSync(
