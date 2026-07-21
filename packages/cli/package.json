@@ -6,6 +6,12 @@
     "laplacebench": "./bin/laplacebench.js"
   },
   "main": "dist/cli.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keisuke70/laplacebench.git",
+    "directory": "packages/cli"
+  },
   "files": [
     "bin",
     "dist",

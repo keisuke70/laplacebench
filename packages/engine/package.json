@@ -19,6 +19,12 @@
     "llm-benchmark",
     "game-engine"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keisuke70/laplacebench.git",
+    "directory": "packages/engine"
+  },
   "devDependencies": {
     "typescript": "^5.9.0"
   }
