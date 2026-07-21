@@ -22,6 +22,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "arena": "tsx src/cli.ts arena",
     "summarize": "tsx src/cli.ts summarize",
     "typecheck": "tsc --noEmit"
