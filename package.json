@@ -1,0 +1,11 @@
+{
+  "name": "laplacebench-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspace laplacebench"
+  }
+}

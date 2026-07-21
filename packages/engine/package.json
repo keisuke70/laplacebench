@@ -1,0 +1,25 @@
+{
+  "name": "laplace-engine",
+  "version": "1.0.0",
+  "description": "Frozen LAPLACE 8x8 rules engine (ruleset laplace-8x8-v1): the deterministic referee used by LaplaceBench. Package versions are immutable ruleset IDs.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc"
+  },
+  "keywords": [
+    "laplace",
+    "laplacebench",
+    "board-game",
+    "llm-benchmark",
+    "game-engine"
+  ],
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

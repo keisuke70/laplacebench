@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://laplacebench.dev/schemas/agent-response-v1.json",
+  "title": "LaplaceBench Agent Response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "move"],
+  "properties": {
+    "request_id": { "type": "string", "minLength": 1 },
+    "move": { "$ref": "#/$defs/move" },
+    "public_message": { "type": "string", "maxLength": 64 }
+  },
+  "$defs": {
+    "position": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 0, "maximum": 7 },
+        { "type": "integer", "minimum": 0, "maximum": 7 }
+      ],
+      "items": false
+    },
+    "move": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/position" },
+        "to": { "$ref": "#/$defs/position" }
+      }
+    }
+  }
+}
