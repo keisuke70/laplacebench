@@ -1,0 +1,28 @@
+name: Verify community runs
+
+on:
+  pull_request:
+    paths:
+      - "community/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Replay-verify every community run
+        run: |
+          shopt -s nullglob
+          dirs=(community/runs/*/)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "no community runs found"; exit 1
+          fi
+          node packages/cli/dist/cli.js verify "${dirs[@]}"
+      - name: Standings preview
+        run: node packages/cli/dist/cli.js standings community/runs/*/

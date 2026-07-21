@@ -1,0 +1,71 @@
+{
+  "run_dir": "/Users/kei/projects/Laplace/pilot/runs/check-centergreedy",
+  "games": 4,
+  "avg_plies": 22,
+  "results": [
+    {
+      "game": "game-000",
+      "team_a": "center-greedy",
+      "team_b": "takeshi",
+      "winner": "B",
+      "reason": "elimination",
+      "plies": 22
+    },
+    {
+      "game": "game-001",
+      "team_a": "takeshi",
+      "team_b": "center-greedy",
+      "winner": "A",
+      "reason": "elimination",
+      "plies": 43
+    },
+    {
+      "game": "game-002",
+      "team_a": "center-greedy",
+      "team_b": "takeshi",
+      "winner": "A",
+      "reason": "center",
+      "plies": 13
+    },
+    {
+      "game": "game-003",
+      "team_a": "takeshi",
+      "team_b": "center-greedy",
+      "winner": "B",
+      "reason": "center",
+      "plies": 8
+    }
+  ],
+  "agents": {
+    "center-greedy": {
+      "record": "2W-0D-2L",
+      "win_reasons": {
+        "center": 2
+      },
+      "illegal_rate_per_turn": 0,
+      "format_failure_rate_per_turn": 0,
+      "failed_turns": 0,
+      "forced_passes": 0,
+      "turns": 41,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "tokens_cache_read": 0,
+      "avg_latency_ms": 0
+    },
+    "takeshi": {
+      "record": "2W-0D-2L",
+      "win_reasons": {
+        "elimination": 2
+      },
+      "illegal_rate_per_turn": 0,
+      "format_failure_rate_per_turn": 0,
+      "failed_turns": 0,
+      "forced_passes": 0,
+      "turns": 45,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "tokens_cache_read": 0,
+      "avg_latency_ms": 0
+    }
+  }
+}

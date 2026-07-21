@@ -1,0 +1,10 @@
+{"t":"game_start","game_id":"game-003","ruleset":"laplace-8x8-v1","seed":3100,"max_plies":300,"team_a":"takeshi","team_b":"center-greedy","ts":"2026-07-20T16:11:41.437Z"}
+{"t":"move","ply":0,"player":1,"from":[0,4],"to":[1,4],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":1,"player":2,"from":[3,7],"to":[3,4],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":2,"player":3,"from":[7,4],"to":[6,4],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":3,"player":4,"from":[3,0],"to":[3,3],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":4,"player":1,"from":[0,2],"to":[2,2],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":5,"player":2,"from":[4,7],"to":[4,4],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":6,"player":3,"from":[7,5],"to":[3,5],"captures":[],"eliminated":null,"winner":null}
+{"t":"move","ply":7,"player":4,"from":[4,0],"to":[4,3],"captures":[],"eliminated":null,"winner":"B"}
+{"t":"game_end","winner":"B","reason":"center","plies":8,"losses":{"Red":0,"Blue":0,"Yellow":0,"Green":0},"ts":"2026-07-20T16:11:49.933Z"}

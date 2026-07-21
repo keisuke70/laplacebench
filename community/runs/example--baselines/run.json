@@ -1,0 +1,12 @@
+{
+  "run_id": "check-centergreedy",
+  "ruleset": "laplace-8x8-v1",
+  "team_a": "center-greedy",
+  "team_b": "takeshi",
+  "games": 4,
+  "swap": true,
+  "seed": 100,
+  "max_plies": 300,
+  "sampling": "provider-default (no temperature control on current models)",
+  "started_at": "2026-07-20T16:10:27.315Z"
+}

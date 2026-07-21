@@ -144,9 +144,45 @@ async function main(): Promise<void> {
     const runDir = path.resolve(String(args["run"] ?? rest[0]));
     const outDir = args["out"] ? path.resolve(String(args["out"])) : defaultOutDir();
     exportRun(runDir, outDir);
+  } else if (cmd === "verify") {
+    const { exportGame } = require("./exportweb") as typeof import("./exportweb");
+    const runDirs = rest.filter((a) => !a.startsWith("--")).map((d) => path.resolve(d));
+    let games = 0;
+    let failed = 0;
+    for (const runDir of runDirs) {
+      const gamesDir = path.join(runDir, "games");
+      if (!fs.existsSync(gamesDir)) {
+        console.error(`FAILED: ${runDir}: no games/ directory`);
+        failed++;
+        continue;
+      }
+      for (const gameId of fs.readdirSync(gamesDir).sort()) {
+        if (!fs.existsSync(path.join(gamesDir, gameId, "events.jsonl"))) continue;
+        games++;
+        try {
+          exportGame(runDir, gameId);
+          console.log(`verified: ${path.basename(runDir)}/${gameId}`);
+        } catch (err: any) {
+          failed++;
+          console.error(`FAILED: ${path.basename(runDir)}/${gameId}: ${err?.message ?? err}`);
+        }
+      }
+    }
+    console.log(`${games - failed}/${games} games verified across ${runDirs.length} run(s)`);
+    if (failed > 0 || games === 0) process.exitCode = 1;
+  } else if (cmd === "standings") {
+    const { standingsMarkdown } = require("./standings") as typeof import("./standings");
+    const dirs = rest.filter((a) => !a.startsWith("--")).map((d) => path.resolve(d));
+    const md = standingsMarkdown(dirs);
+    if (args["out"]) {
+      fs.writeFileSync(path.resolve(String(args["out"])), md);
+      console.log(`standings written: ${args["out"]}`);
+    } else {
+      console.log(md);
+    }
   } else {
     console.log(
-      "usage:\n  tsx src/cli.ts arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N]\n  tsx src/cli.ts summarize <runDir>\n  tsx src/cli.ts export-web <runDir> [--out <dir>]   (verify + export to web app /bench)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
+      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
     );
     process.exitCode = 1;
   }

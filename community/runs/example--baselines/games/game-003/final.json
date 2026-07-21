@@ -1,0 +1,44 @@
+{
+  "gameId": "game-003",
+  "ruleset": "laplace-8x8-v1",
+  "seed": 3100,
+  "winner": "B",
+  "reason": "center",
+  "plies": 8,
+  "losses": {
+    "Red": 0,
+    "Blue": 0,
+    "Yellow": 0,
+    "Green": 0
+  },
+  "teams": {
+    "A": {
+      "agent": "takeshi",
+      "turns": 4,
+      "moves": 4,
+      "actCalls": 4,
+      "formatFailures": 0,
+      "legalityFailures": 0,
+      "failedTurns": 0,
+      "forcedPasses": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "latencyMs": 0
+    },
+    "B": {
+      "agent": "center-greedy",
+      "turns": 4,
+      "moves": 4,
+      "actCalls": 4,
+      "formatFailures": 0,
+      "legalityFailures": 0,
+      "failedTurns": 0,
+      "forcedPasses": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "latencyMs": 0
+    }
+  }
+}

@@ -39,26 +39,36 @@ animations, and per-model reliability stats.
 
 ## Quickstart
 
-```bash
-npm install && npm run build
+No clone, no install, no API key:
 
-# no LLM needed — watch the baseline ladder fight
-npx tsx packages/cli/src/cli.ts arena --team-a takeshi --team-b center-greedy --games 2 --swap
+```bash
+# watch the baseline ladder fight (no LLM needed)
+npx laplacebench arena --team-a takeshi --team-b center-greedy --games 2 --swap
 
 # with a Claude subscription (Claude Code CLI installed & logged in)
-npx tsx packages/cli/src/cli.ts arena \
-  --team-a claude-cli:sonnet@low --team-b takeshi --games 2 --swap
+npx laplacebench arena --team-a claude-cli:sonnet@low --team-b takeshi --games 2 --swap
 
 # frontier vs frontier on your own subscriptions
-npx tsx packages/cli/src/cli.ts arena \
+npx laplacebench arena \
   --team-a claude-cli:claude-fable-5@medium --team-b codex-cli:gpt-5.6-sol@medium \
   --games 2 --swap
 
 # learning-vs-cold: same model, only the accumulation loop differs
-npx tsx packages/cli/src/cli.ts arena \
-  --team-a claude-cli-learn:sonnet@low --team-b claude-cli:sonnet@low \
-  --games 4 --swap
+npx laplacebench arena \
+  --team-a claude-cli-learn:sonnet@low --team-b claude-cli:sonnet@low --games 4 --swap
+
+# verify any run's log against the frozen engine, or share it
+npx laplacebench verify runs/<run-id>
+npx laplacebench export-web runs/<run-id> --out ./replays
 ```
+
+Watch your exported games by dropping the replay JSON onto the public
+spectator page (`/bench` on the LAPLACE site) — playback is fully
+client-side. To submit games to the community lane, see
+[community/README.md](community/README.md).
+
+For development, clone and `npm install && npm run build`, then use
+`npx tsx packages/cli/src/cli.ts ...` in place of `npx laplacebench ...`.
 
 Every run writes `runs/<id>/` with an immutable event stream, per-game
 results, and a metrics summary (W/D/L, win reasons, illegal-move and
