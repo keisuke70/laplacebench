@@ -21,6 +21,8 @@ export interface TeamStats {
   legalityFailures: number;
   failedTurns: number;
   forcedPasses: number;
+  timeoutSkips: number;
+  tokenBudgetSkips: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -44,6 +46,10 @@ export interface GameConfig {
   runDir: string;
   seed: number;
   maxPlies: number;
+  /** Shared by both repair attempts. Defaults to five minutes. */
+  turnTimeoutMs?: number;
+  /** Per-team in-game output-token admission cap. Omit for no cap. */
+  outputTokenBudget?: number;
   agents: Record<TeamId, Agent>;
 }
 
@@ -59,6 +65,8 @@ function newTeamStats(agent: Agent): TeamStats {
     legalityFailures: 0,
     failedTurns: 0,
     forcedPasses: 0,
+    timeoutSkips: 0,
+    tokenBudgetSkips: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,
@@ -95,6 +103,8 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
     ruleset: RULESET,
     seed: cfg.seed,
     max_plies: cfg.maxPlies,
+    turn_timeout_ms: cfg.turnTimeoutMs ?? 300_000,
+    output_token_budget_per_team: cfg.outputTokenBudget ?? null,
     team_a: cfg.agents.A.name,
     team_b: cfg.agents.B.name,
     ts: new Date().toISOString(),
@@ -137,12 +147,52 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
       continue;
     }
 
+    // Admission is checked once per game turn. If the team is still below
+    // the cap, the whole turn (including a repair attempt) may complete and
+    // overshoot it. The next turn will then be skipped.
+    if (
+      agent.usageProfile &&
+      cfg.outputTokenBudget !== undefined &&
+      st.usage.outputTotalTokens >= cfg.outputTokenBudget
+    ) {
+      const beforeElim = [...state.eliminatedPlayers];
+      manager.advanceTurn();
+      const eliminated = manager.state.eliminatedPlayers.findIndex(
+        (e, i) => e && !beforeElim[i]
+      );
+      st.tokenBudgetSkips++;
+      const ev: RecentEvent = {
+        ply,
+        color: colorName(actingPlayer),
+        action: "pass",
+        eliminated: eliminated >= 0 ? colorName(eliminated + 1) : null,
+      };
+      pushEvent(ev);
+      emit({
+        t: "pass",
+        ply,
+        player: actingPlayer,
+        reason: "token_budget",
+        output_tokens_used: st.usage.outputTotalTokens,
+        output_token_budget: cfg.outputTokenBudget,
+        eliminated: ev.eliminated,
+      });
+      ply++;
+      continue;
+    }
+
     const teamRecent = recent[team];
     recent[team] = [];
+    const deadlineAtMs = Date.now() + (cfg.turnTimeoutMs ?? 300_000);
 
     let moved = false;
+    let timedOut = false;
     let error: { code: ReturnType<typeof failureCode> } | undefined;
     for (let attempt = 1; attempt <= 2 && !moved; attempt++) {
+      if (Date.now() >= deadlineAtMs) {
+        timedOut = true;
+        break;
+      }
       const reply = await agent.act({
         state,
         ply,
@@ -153,6 +203,7 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
         attempt,
         error,
         maxPlies: cfg.maxPlies,
+        deadlineAtMs,
       });
       st.actCalls++;
       if (reply.latencyMs) st.latencyMs += reply.latencyMs;
@@ -167,6 +218,18 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
           attempt,
           usage: reply.usage ?? null,
         });
+      }
+      if (reply.timedOut || Date.now() >= deadlineAtMs) {
+        timedOut = true;
+        emit({
+          t: "failure",
+          ply,
+          attempt,
+          kind: "timeout",
+          deadline_ms: cfg.turnTimeoutMs ?? 300_000,
+          raw: reply.raw?.slice(0, 500),
+        });
+        break;
       }
 
       if (!reply.move) {
@@ -235,6 +298,7 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
         (e, i) => e && !beforeElim[i]
       );
       st.failedTurns++;
+      if (timedOut) st.timeoutSkips++;
       const ev: RecentEvent = {
         ply,
         color: colorName(actingPlayer),
@@ -242,7 +306,13 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
         eliminated: eliminatedIdx >= 0 ? colorName(eliminatedIdx + 1) : null,
       };
       pushEvent(ev);
-      emit({ t: "pass", ply, player: actingPlayer, reason: "failed_turn", eliminated: ev.eliminated });
+      emit({
+        t: "pass",
+        ply,
+        player: actingPlayer,
+        reason: timedOut ? "timeout" : "failed_turn",
+        eliminated: ev.eliminated,
+      });
     }
 
     ply++;
@@ -266,15 +336,12 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
   };
 
   emit({ t: "game_end", winner: result.winner, reason, plies: ply, losses, ts: new Date().toISOString() });
-  // Preserve the completed game result before optional post-game analysis,
-  // then rewrite it below with any usage that analysis reports.
   fs.writeFileSync(
     path.join(gameDir, "final.json"),
     JSON.stringify(result, null, 2)
   );
   for (const team of ["A", "B"] as const) {
-    const agent = cfg.agents[team];
-    const report = await agent.endGame?.({
+    await cfg.agents[team].endGame?.({
       gameId: cfg.gameId,
       team,
       result:
@@ -284,22 +351,7 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
       plies: ply,
       eventsPath,
     });
-    for (const usage of report?.usageReports ?? []) {
-      recordUsageCall(stats[team].usage, usage ?? undefined, agent.usageProfile);
-      syncLegacyUsageFields(stats[team]);
-      emit({
-        t: "usage",
-        phase: "postgame",
-        team,
-        usage,
-      });
-    }
   }
-
-  fs.writeFileSync(
-    path.join(gameDir, "final.json"),
-    JSON.stringify(result, null, 2)
-  );
 
   return result;
 }

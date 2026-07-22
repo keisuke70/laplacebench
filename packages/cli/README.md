@@ -58,6 +58,16 @@ Input totals include cached input exactly once. Claude/OpenAI raw token totals
 remain descriptive across providers; the formulas and limits are documented
 in [usage semantics](../../docs/usage-semantics.md).
 
+Match resource controls:
+
+- `--output-token-budget N`: per team/game, in-game reasoning-inclusive output
+  only; an admitted turn may overshoot and still play its move;
+- `--turn-timeout-ms N`: one deadline shared by both attempts in a turn
+  (default `300000`); expiry advances the product turn as a timeout pass.
+
+Post-game learning is participant-owned harness activity and is excluded from
+the match wallet and match usage summary.
+
 ## Design notes
 
 - Ruleset `laplace-8x8-v1` (elimination threshold fixed at 3). Rulebook

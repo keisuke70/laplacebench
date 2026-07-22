@@ -22,30 +22,31 @@ const DISALLOWED_CLAUDE_TOOLS = [
   "NotebookEdit",
 ].join(",");
 
-const CLI_TIMEOUT_MS = 300_000;
-
 interface Spawned {
   stdout: string;
   stderr: string;
   code: number | null;
+  timedOut: boolean;
 }
 
 function run(
   cmd: string,
   args: string[],
   cwd: string,
+  timeoutMs: number,
   input?: string
 ): Promise<Spawned> {
   return new Promise((resolve) => {
     const child = execFile(
       cmd,
       args,
-      { cwd, timeout: CLI_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 },
+      { cwd, timeout: Math.max(1, timeoutMs), maxBuffer: 64 * 1024 * 1024 },
       (err, stdout, stderr) => {
         resolve({
           stdout: stdout ?? "",
           stderr: stderr ?? "",
           code: (err as any)?.code ?? 0,
+          timedOut: Boolean((err as any)?.killed),
         });
       }
     );
@@ -123,9 +124,27 @@ export function claudeCliAgent(opts: {
       }
 
       const start = Date.now();
-      const { stdout, stderr, code } = await run("claude", args, cwd);
+      const { stdout, stderr, code, timedOut } = await run(
+        "claude",
+        args,
+        cwd,
+        input.deadlineAtMs - Date.now()
+      );
       const latencyMs = Date.now() - start;
       started = true;
+
+      if (timedOut || Date.now() >= input.deadlineAtMs) {
+        // The killed session may contain a dangling user turn or partial
+        // assistant output. Restart from the next full-state observation.
+        sessionId = uuid();
+        started = false;
+        return {
+          move: null,
+          raw: `TURN_TIMEOUT: stderr=${stderr.slice(0, 300)}`,
+          latencyMs,
+          timedOut: true,
+        };
+      }
 
       let parsed: any;
       try {
@@ -213,8 +232,26 @@ export function codexCliAgent(opts: { model?: string; effort?: string }): Agent 
         : [...base, userText];
 
       const start = Date.now();
-      const { stdout, stderr, code } = await run("codex", args, cwd);
+      const { stdout, stderr, code, timedOut } = await run(
+        "codex",
+        args,
+        cwd,
+        input.deadlineAtMs - Date.now()
+      );
       const latencyMs = Date.now() - start;
+
+      if (timedOut || Date.now() >= input.deadlineAtMs) {
+        // Do not resume a thread whose last turn was interrupted and whose
+        // move was discarded by the referee.
+        threadId = "";
+        started = false;
+        return {
+          move: null,
+          raw: `TURN_TIMEOUT: stderr=${stderr.slice(0, 300)}`,
+          latencyMs,
+          timedOut: true,
+        };
+      }
 
       const events = stdout
         .split("\n")

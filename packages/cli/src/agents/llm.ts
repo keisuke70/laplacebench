@@ -62,39 +62,41 @@ export function anthropicAgent(opts: { model: string }): Agent {
       const start = Date.now();
       let response: Anthropic.Message;
       try {
-        response = await client.messages.create({
-          model,
-          max_tokens: 16000,
-          ...(isLegacyThinking ? {} : { thinking: { type: "adaptive" } }),
-          system: [
-            {
-              type: "text",
-              text: system,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          messages: withCacheMarker(messages),
-        });
+        const remainingMs = Math.max(1, input.deadlineAtMs - Date.now());
+        response = await client.messages.create(
+          {
+            model,
+            max_tokens: 16000,
+            ...(isLegacyThinking ? {} : { thinking: { type: "adaptive" } }),
+            system: [
+              {
+                type: "text",
+                text: system,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            messages: withCacheMarker(messages),
+          },
+          {
+            timeout: remainingMs,
+            signal: AbortSignal.timeout(remainingMs),
+          }
+        );
       } catch (err: any) {
         // Terminal API failure after SDK retries: recorded as a failed reply.
         messages.pop();
+        const timedOut = Date.now() >= input.deadlineAtMs;
         return {
           move: null,
-          raw: `API_ERROR: ${err?.message ?? String(err)}`,
+          raw: `${timedOut ? "TURN_TIMEOUT" : "API_ERROR"}: ${err?.message ?? String(err)}`,
           latencyMs: Date.now() - start,
+          timedOut,
         };
       }
       const latencyMs = Date.now() - start;
       const applicationInput = started
         ? userText
         : `${system}\n\n---\n\n${userText}`;
-      started = true;
-
-      // Keep the full content (thinking blocks included) for continuation.
-      messages.push({
-        role: "assistant",
-        content: response.content as unknown as Anthropic.ContentBlockParam[],
-      });
 
       const text = response.content
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -103,6 +105,29 @@ export function anthropicAgent(opts: { model: string }): Agent {
 
       const move =
         response.stop_reason === "refusal" ? null : extractMove(text);
+
+      if (Date.now() >= input.deadlineAtMs) {
+        messages.pop();
+        return {
+          move: null,
+          raw: "TURN_TIMEOUT: response completed after the game-turn deadline",
+          latencyMs,
+          usage: normalizeAnthropicUsage(
+            response.usage as unknown as Record<string, unknown>,
+            "anthropic-api",
+            applicationInput,
+            text
+          ),
+          timedOut: true,
+        };
+      }
+
+      started = true;
+      // Keep the full content (thinking blocks included) for continuation.
+      messages.push({
+        role: "assistant",
+        content: response.content as unknown as Anthropic.ContentBlockParam[],
+      });
 
       return {
         move,

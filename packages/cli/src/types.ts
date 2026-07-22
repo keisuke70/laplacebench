@@ -38,6 +38,8 @@ export interface TurnInput {
   attempt: number;
   error?: { code: FailureCode };
   maxPlies: number;
+  /** Absolute wall-clock deadline shared by all attempts in this game turn. */
+  deadlineAtMs: number;
 }
 
 export const MODEL_USAGE_SCHEMA = "laplace-model-usage-v1" as const;
@@ -103,6 +105,8 @@ export interface AgentReply {
   raw?: string;
   latencyMs?: number;
   usage?: ModelUsage;
+  /** The reply missed the turn deadline and must never be applied. */
+  timedOut?: boolean;
 }
 
 export interface EndGameInfo {
@@ -121,12 +125,7 @@ export interface Agent {
   usageProfile?: UsageProfile;
   startGame?(team: TeamId, gameId: string): Promise<void> | void;
   act(input: TurnInput): Promise<AgentReply> | AgentReply;
-  endGame?(
-    info?: EndGameInfo
-  ):
-    | Promise<{ usageReports?: Array<ModelUsage | null> } | void>
-    | { usageReports?: Array<ModelUsage | null> }
-    | void;
+  endGame?(info?: EndGameInfo): Promise<void> | void;
 }
 
 /** mulberry32 seeded PRNG */

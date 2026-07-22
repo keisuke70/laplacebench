@@ -90,6 +90,23 @@ async function arena(args: Record<string, string | boolean>): Promise<void> {
   const swap = Boolean(args["swap"]);
   const seed = parseInt(String(args["seed"] ?? "42"), 10);
   const maxPlies = parseInt(String(args["max-plies"] ?? "300"), 10);
+  const turnTimeoutMs = parseInt(
+    String(args["turn-timeout-ms"] ?? "300000"),
+    10
+  );
+  const outputTokenBudget =
+    args["output-token-budget"] === undefined
+      ? undefined
+      : parseInt(String(args["output-token-budget"]), 10);
+  if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs <= 0) {
+    throw new Error("--turn-timeout-ms must be a positive integer");
+  }
+  if (
+    outputTokenBudget !== undefined &&
+    (!Number.isSafeInteger(outputTokenBudget) || outputTokenBudget <= 0)
+  ) {
+    throw new Error("--output-token-budget must be a positive integer");
+  }
 
   const runId =
     (args["run-id"] as string) ||
@@ -110,9 +127,12 @@ async function arena(args: Record<string, string | boolean>): Promise<void> {
         swap,
         seed,
         max_plies: maxPlies,
+        turn_timeout_ms: turnTimeoutMs,
+        output_token_budget_per_team_per_game: outputTokenBudget ?? null,
+        output_token_budget_metric: "in-game output_tokens_total (reasoning inclusive)",
         sampling: "provider-default (no temperature control on current models)",
         usage_schema: "laplace-model-usage-v1",
-        usage_scope: "all adapter calls, including repair and post-game learning calls",
+        usage_scope: "in-game act calls, including repair attempts; excludes post-game learning",
         cli_versions: {
           claude:
             specA.startsWith("claude-cli") || specB.startsWith("claude-cli")
@@ -143,6 +163,8 @@ async function arena(args: Record<string, string | boolean>): Promise<void> {
       runDir,
       seed: gameSeed,
       maxPlies,
+      turnTimeoutMs,
+      outputTokenBudget,
       agents: { A: first, B: second },
     });
     console.log(
@@ -207,7 +229,7 @@ async function main(): Promise<void> {
     }
   } else {
     console.log(
-      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
+      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
     );
     process.exitCode = 1;
   }

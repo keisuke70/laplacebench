@@ -21,6 +21,8 @@ interface BenchTeamStats {
   formatFailures: number;
   legalityFailures: number;
   failedTurns: number;
+  timeoutSkips: number;
+  tokenBudgetSkips: number;
   outputTokens: number;
   cacheReadTokens: number;
   avgLatencyMs: number;
@@ -156,6 +158,8 @@ export function exportGame(
       formatFailures: t.formatFailures,
       legalityFailures: t.legalityFailures,
       failedTurns: t.failedTurns,
+      timeoutSkips: t.timeoutSkips ?? 0,
+      tokenBudgetSkips: t.tokenBudgetSkips ?? 0,
       outputTokens: t.outputTokens,
       cacheReadTokens: t.cacheReadTokens,
       avgLatencyMs: t.actCalls > 0 ? Math.round(t.latencyMs / t.actCalls) : 0,

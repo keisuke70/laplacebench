@@ -95,13 +95,38 @@ not estimate hidden reasoning or provider compute.
 
 ## Scope and limits
 
-Usage covers every adapter call made by a run, including repair attempts and
-post-game learning calls. It is returned after a call completes, so a
-subscription CLI budget can stop the **next** call but cannot guarantee an
-exact mid-generation cutoff. A timeout may consume provider resources without
-returning final telemetry; such a call is counted as unreported.
+Competition usage covers in-game adapter calls, including repair attempts.
+Post-game analysis belongs to the participant-owned Skills/harness workflow
+and is excluded from the match wallet and match usage summary. Usage is
+returned after an in-game call completes, so a subscription CLI budget can
+stop the **next turn** but cannot guarantee an exact mid-generation cutoff. A
+timeout may consume provider resources without returning final telemetry;
+such a call is counted as unreported.
 
 Subscription usage is not the user's remaining Claude/ChatGPT plan quota and
 is not a bill. Exact official budget enforcement should use a maintainer-owned
 API gateway with provider output limits; subscription runs remain a separate
 condition.
+
+## Match resource policy
+
+The optional `--output-token-budget N` is a separate wallet for each team in
+each game. It uses in-game `output_tokens_total`, which includes reasoning for
+both providers and avoids using vendor-injected input context as the common
+budget currency.
+
+Admission is checked once at the start of a scheduled turn:
+
+1. if usage is below the cap, the complete turn is admitted, including its
+   repair attempt;
+2. the admitted turn may finish above the cap and its valid move still counts;
+3. later turns at or above the cap skip without calling the model.
+
+There is intentionally no mid-generation cutoff and no attempt to claw back
+the final admitted move. Post-game learning is outside this wallet.
+
+Each turn has one wall-clock deadline shared by both attempts. The default is
+300,000 ms (five minutes). A reply completing after the deadline is discarded,
+and the referee calls the same `advanceTurn()` path used for a product timeout.
+The pass is logged separately as `timeout`; token-budget admission failures are
+logged as `token_budget`.

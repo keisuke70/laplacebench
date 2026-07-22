@@ -23,6 +23,8 @@ interface AgentAgg {
   legalityFailures: number;
   failedTurns: number;
   forcedPasses: number;
+  timeoutSkips: number;
+  tokenBudgetSkips: number;
   usage: UsageAggregate;
   latencyMs: number;
   plies: number;
@@ -42,6 +44,8 @@ function blank(): AgentAgg {
     legalityFailures: 0,
     failedTurns: 0,
     forcedPasses: 0,
+    timeoutSkips: 0,
+    tokenBudgetSkips: 0,
     usage: blankUsage(),
     latencyMs: 0,
     plies: 0,
@@ -75,6 +79,8 @@ export function summarize(runDir: string): object {
       agg.legalityFailures += ts.legalityFailures;
       agg.failedTurns += ts.failedTurns;
       agg.forcedPasses += ts.forcedPasses;
+      agg.timeoutSkips += ts.timeoutSkips ?? 0;
+      agg.tokenBudgetSkips += ts.tokenBudgetSkips ?? 0;
       mergeUsage(
         agg.usage,
         isUsageAggregate(ts.usage) ? ts.usage : legacyUsageFromTeamStats(ts)
@@ -120,6 +126,8 @@ export function summarize(runDir: string): object {
             a.turns > 0 ? +(a.formatFailures / a.turns).toFixed(3) : 0,
           failed_turns: a.failedTurns,
           forced_passes: a.forcedPasses,
+          timeout_skips: a.timeoutSkips,
+          token_budget_skips: a.tokenBudgetSkips,
           turns: a.turns,
           // Backward-compatible aliases. `tokens_in` is now normalized total
           // input and includes cached input exactly once.
