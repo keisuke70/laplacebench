@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { observation } from "../engine";
 import { buildInstructions, extractMove, turnMessage } from "../prompt";
 import type { Agent, AgentReply, TeamId, TurnInput } from "../types";
+import { normalizeAnthropicUsage, normalizeOpenAIUsage } from "../usage";
 
 const DISALLOWED_CLAUDE_TOOLS = [
   "Bash",
@@ -94,6 +95,7 @@ export function claudeCliAgent(opts: {
 
   return {
     name: opts.name ?? `claude-cli:${model}${opts.effort ? `@${opts.effort}` : ""}`,
+    usageProfile: { provider: "anthropic", source: "claude-cli" },
     startGame(t: TeamId) {
       team = t;
       sessionId = uuid();
@@ -150,11 +152,12 @@ export function claudeCliAgent(opts: {
         move: extractMove(text),
         raw: text,
         latencyMs,
-        usage: {
-          inputTokens: usage.input_tokens ?? 0,
-          outputTokens: usage.output_tokens ?? 0,
-          cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-        },
+        usage: normalizeAnthropicUsage(
+          usage,
+          "claude-cli",
+          userText,
+          text
+        ),
       };
     },
     endGame() {
@@ -188,6 +191,7 @@ export function codexCliAgent(opts: { model?: string; effort?: string }): Agent 
 
   return {
     name: `codex-cli:${model || "default"}${opts.effort ? `@${opts.effort}` : ""}`,
+    usageProfile: { provider: "openai", source: "codex-cli" },
     startGame(t: TeamId) {
       team = t;
       threadId = "";
@@ -253,11 +257,7 @@ export function codexCliAgent(opts: { model?: string; effort?: string }): Agent 
         move: extractMove(text),
         raw: text,
         latencyMs,
-        usage: {
-          inputTokens: u.input_tokens ?? 0,
-          outputTokens: u.output_tokens ?? 0,
-          cacheReadTokens: u.cached_input_tokens ?? 0,
-        },
+        usage: normalizeOpenAIUsage(u, "codex-cli", userText, text),
       };
     },
     endGame() {

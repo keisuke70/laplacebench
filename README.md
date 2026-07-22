@@ -72,7 +72,10 @@ For development, clone and `npm install && npm run build`, then use
 
 Every run writes `runs/<id>/` with an immutable event stream, per-game
 results, and a metrics summary (W/D/L, win reasons, illegal-move and
-format-failure rates, tokens, latency). `export-web` re-plays the log
+format-failure rates, normalized provider usage with reporting coverage,
+application I/O bytes, and latency). Cross-provider token totals are
+descriptive only; see [usage semantics](docs/usage-semantics.md).
+`export-web` re-plays the log
 through the engine (failing loudly on any divergence) and emits spectator
 replay JSON.
 
@@ -91,6 +94,8 @@ replay JSON.
 - [Rulebook given to models](packages/cli/rulebook/laplace-8x8-v1.md)
 - [Design v0.1](docs/design-v0.1.md) — tracks, metrics, failure policy,
   contamination resistance
+- [Usage semantics](docs/usage-semantics.md) — Claude/OpenAI cache accounting,
+  reporting coverage, and the cross-provider comparison boundary
 - [Benchmark strategy (JA)](docs/benchmark-strategy-ja.md) — statistical
   power, red-team notes, launch plan
 - [Experiment axes (JA)](docs/experiment-axes-ja.md) — modality / context /

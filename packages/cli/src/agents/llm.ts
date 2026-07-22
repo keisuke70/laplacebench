@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { observation } from "../engine";
 import { buildInstructions, extractMove, turnMessage } from "../prompt";
 import type { Agent, AgentReply, TeamId, TurnInput } from "../types";
+import { normalizeAnthropicUsage } from "../usage";
 
 const MODEL_SHORTHAND: Record<string, string> = {
   opus: "claude-opus-4-8",
@@ -26,12 +27,15 @@ export function anthropicAgent(opts: { model: string }): Agent {
   const isLegacyThinking = model.includes("haiku") || model.includes("4-5");
   let messages: Anthropic.MessageParam[] = [];
   let system = "";
+  let started = false;
 
   return {
     name: `anthropic:${model}`,
+    usageProfile: { provider: "anthropic", source: "anthropic-api" },
     startGame(team: TeamId) {
       messages = [];
       system = buildInstructions(team);
+      started = false;
     },
     async act(input: TurnInput): Promise<AgentReply> {
       const obsJson = JSON.stringify(
@@ -81,6 +85,10 @@ export function anthropicAgent(opts: { model: string }): Agent {
         };
       }
       const latencyMs = Date.now() - start;
+      const applicationInput = started
+        ? userText
+        : `${system}\n\n---\n\n${userText}`;
+      started = true;
 
       // Keep the full content (thinking blocks included) for continuation.
       messages.push({
@@ -103,11 +111,12 @@ export function anthropicAgent(opts: { model: string }): Agent {
             ? `REFUSAL: ${JSON.stringify(response.stop_details ?? null)}`
             : text,
         latencyMs,
-        usage: {
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
-          cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-        },
+        usage: normalizeAnthropicUsage(
+          response.usage as unknown as Record<string, unknown>,
+          "anthropic-api",
+          applicationInput,
+          text
+        ),
       };
     },
   };

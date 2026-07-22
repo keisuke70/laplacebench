@@ -236,7 +236,9 @@ them.
 - friendly-fire and self-blunder rate;
 - timeouts/provider failures;
 - median and tail latency;
-- input/output tokens and estimated cost;
+- normalized provider-reported input/output/cache/reasoning usage with
+  reporting coverage and application I/O bytes (cross-provider totals remain
+  descriptive; see [usage semantics](usage-semantics.md));
 - deterministic replay verification rate.
 
 ### Derived diagnostics

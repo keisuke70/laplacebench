@@ -22,9 +22,10 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm test && npm run build",
     "arena": "tsx src/cli.ts arena",
     "summarize": "tsx src/cli.ts summarize",
+    "test": "tsx --test test/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

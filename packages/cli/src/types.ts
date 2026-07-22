@@ -40,11 +40,69 @@ export interface TurnInput {
   maxPlies: number;
 }
 
+export const MODEL_USAGE_SCHEMA = "laplace-model-usage-v1" as const;
+
+export type UsageProvider = "anthropic" | "openai";
+export type UsageSource = "anthropic-api" | "claude-cli" | "codex-cli";
+
+/**
+ * Provider-reported usage normalized to one semantic shape.
+ *
+ * `inputTotalTokens` always includes cached input exactly once. Anthropic
+ * reports uncached, cache-write, and cache-read input as three additive
+ * fields; OpenAI reports total input with cached input as a subset. Keeping
+ * both the total and the cache buckets prevents accidental double-counting.
+ * `outputTotalTokens` is inclusive of reasoning tokens for both providers.
+ */
+export interface ModelUsage {
+  schema: typeof MODEL_USAGE_SCHEMA;
+  provider: UsageProvider;
+  source: UsageSource;
+  inputTotalTokens: number;
+  inputUncachedTokens: number;
+  cacheReadTokens: number;
+  /** null means the provider surface did not report this bucket. */
+  cacheWriteTokens: number | null;
+  outputTotalTokens: number;
+  /** null means the provider surface did not expose the reasoning split. */
+  reasoningTokens: number | null;
+  /** UTF-8 bytes newly added by LaplaceBench, excluding provider/CLI prompts. */
+  applicationInputBytes: number;
+  /** UTF-8 bytes of model text observed by LaplaceBench. */
+  applicationOutputBytes: number;
+}
+
+export interface UsageProfile {
+  provider: UsageProvider;
+  source: UsageSource;
+}
+
+export interface UsageAggregate {
+  schema: typeof MODEL_USAGE_SCHEMA;
+  adapterCalls: number;
+  reportedCalls: number;
+  unreportedCalls: number;
+  /** Calls imported from artifacts written before this schema existed. */
+  legacyUnversionedCalls: number;
+  providers: UsageProvider[];
+  sources: UsageSource[];
+  inputTotalTokens: number;
+  inputUncachedTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheWriteReportedCalls: number;
+  outputTotalTokens: number;
+  reasoningTokens: number;
+  reasoningReportedCalls: number;
+  applicationInputBytes: number;
+  applicationOutputBytes: number;
+}
+
 export interface AgentReply {
   move: Move | null;
   raw?: string;
   latencyMs?: number;
-  usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number };
+  usage?: ModelUsage;
 }
 
 export interface EndGameInfo {
@@ -59,9 +117,16 @@ export interface EndGameInfo {
 
 export interface Agent {
   name: string;
+  /** Present when each `act` call is expected to produce model usage. */
+  usageProfile?: UsageProfile;
   startGame?(team: TeamId, gameId: string): Promise<void> | void;
   act(input: TurnInput): Promise<AgentReply> | AgentReply;
-  endGame?(info?: EndGameInfo): Promise<void> | void;
+  endGame?(
+    info?: EndGameInfo
+  ):
+    | Promise<{ usageReports?: Array<ModelUsage | null> } | void>
+    | { usageReports?: Array<ModelUsage | null> }
+    | void;
 }
 
 /** mulberry32 seeded PRNG */

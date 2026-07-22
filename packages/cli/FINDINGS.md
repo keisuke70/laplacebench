@@ -202,6 +202,12 @@ Cost/latency (subscription, so wall-clock is the real constraint):
 - Codex: 21 turns, ~41s/turn avg, 225k output tokens, ~5.1M cached input.
 - Whole game ~42 minutes.
 
+Usage note (added 2026-07-22): these are historical pre-
+`laplace-model-usage-v1` figures. The old Claude collector omitted
+`cache_creation_input_tokens`, while OpenAI `input_tokens` already included
+its cached subset. They are descriptive provider-local diagnostics, not a
+cross-provider token-efficiency comparison. See `docs/usage-semantics.md`.
+
 Interpretation: one game is an anecdote, not a rating — but the pilot's
 core question ("does Laplace discriminate?") is trending yes: a capable
 model pair produces a long, legal, tactically rich game with a clear
@@ -288,9 +294,11 @@ correctly.
   for continuity, tools disabled. Zero API key, zero per-token billing.
 - **Sonnet learned the rules cold.** No legal-move list, novel rulebook, and
   it produced 6 legal rook-moves and a valid win plan with no rule errors.
-- **Prompt caching pays off.** 205,735 cache-read tokens across 6 turns vs 12
-  uncached input tokens — the append-only-transcript design keeps per-turn
-  input almost entirely cached.
+- **Prompt caching is heavily used.** The historical collector recorded
+  205,735 cache-read tokens across 6 turns. Its old "12 uncached input"
+  figure omitted Claude cache-creation tokens, so it must not be read as a
+  complete fresh-input total; this is corrected by
+  `laplace-model-usage-v1`.
 - **Cost/latency:** ~35s per Sonnet turn (212s for 6 turns). Center-rush wins
   are short; expect full strategic games to run much longer. Wall-clock, not
   dollars, is the constraint under a subscription.

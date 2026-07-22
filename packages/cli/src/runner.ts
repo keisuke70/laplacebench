@@ -9,7 +9,8 @@ import {
   playerTeam,
   winReason,
 } from "./engine";
-import type { Agent, RecentEvent, TeamId } from "./types";
+import type { Agent, RecentEvent, TeamId, UsageAggregate } from "./types";
+import { blankUsage, recordUsageCall } from "./usage";
 
 export interface TeamStats {
   agent: string;
@@ -24,6 +25,7 @@ export interface TeamStats {
   outputTokens: number;
   cacheReadTokens: number;
   latencyMs: number;
+  usage: UsageAggregate;
 }
 
 export interface GameResult {
@@ -47,9 +49,9 @@ export interface GameConfig {
 
 const RULESET = "laplace-8x8-v1";
 
-function newTeamStats(agent: string): TeamStats {
+function newTeamStats(agent: Agent): TeamStats {
   return {
-    agent,
+    agent: agent.name,
     turns: 0,
     moves: 0,
     actCalls: 0,
@@ -61,7 +63,16 @@ function newTeamStats(agent: string): TeamStats {
     outputTokens: 0,
     cacheReadTokens: 0,
     latencyMs: 0,
+    usage: blankUsage(agent.usageProfile),
   };
+}
+
+function syncLegacyUsageFields(stats: TeamStats): void {
+  // Compatibility aliases for existing replay/UI consumers. Unlike the old
+  // implementation, inputTokens now means total input including cache once.
+  stats.inputTokens = stats.usage.inputTotalTokens;
+  stats.outputTokens = stats.usage.outputTotalTokens;
+  stats.cacheReadTokens = stats.usage.cacheReadTokens;
 }
 
 export async function playGame(cfg: GameConfig): Promise<GameResult> {
@@ -73,8 +84,8 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
 
   const manager = newGame();
   const stats: Record<TeamId, TeamStats> = {
-    A: newTeamStats(cfg.agents.A.name),
-    B: newTeamStats(cfg.agents.B.name),
+    A: newTeamStats(cfg.agents.A),
+    B: newTeamStats(cfg.agents.B),
   };
   const recent: Record<TeamId, RecentEvent[]> = { A: [], B: [] };
 
@@ -145,10 +156,17 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
       });
       st.actCalls++;
       if (reply.latencyMs) st.latencyMs += reply.latencyMs;
-      if (reply.usage) {
-        st.inputTokens += reply.usage.inputTokens;
-        st.outputTokens += reply.usage.outputTokens;
-        st.cacheReadTokens += reply.usage.cacheReadTokens ?? 0;
+      if (agent.usageProfile || reply.usage) {
+        recordUsageCall(st.usage, reply.usage, agent.usageProfile);
+        syncLegacyUsageFields(st);
+        emit({
+          t: "usage",
+          phase: "play",
+          team,
+          ply,
+          attempt,
+          usage: reply.usage ?? null,
+        });
       }
 
       if (!reply.move) {
@@ -248,13 +266,15 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
   };
 
   emit({ t: "game_end", winner: result.winner, reason, plies: ply, losses, ts: new Date().toISOString() });
+  // Preserve the completed game result before optional post-game analysis,
+  // then rewrite it below with any usage that analysis reports.
   fs.writeFileSync(
     path.join(gameDir, "final.json"),
     JSON.stringify(result, null, 2)
   );
-
   for (const team of ["A", "B"] as const) {
-    await cfg.agents[team].endGame?.({
+    const agent = cfg.agents[team];
+    const report = await agent.endGame?.({
       gameId: cfg.gameId,
       team,
       result:
@@ -264,7 +284,22 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
       plies: ply,
       eventsPath,
     });
+    for (const usage of report?.usageReports ?? []) {
+      recordUsageCall(stats[team].usage, usage ?? undefined, agent.usageProfile);
+      syncLegacyUsageFields(stats[team]);
+      emit({
+        t: "usage",
+        phase: "postgame",
+        team,
+        usage,
+      });
+    }
   }
+
+  fs.writeFileSync(
+    path.join(gameDir, "final.json"),
+    JSON.stringify(result, null, 2)
+  );
 
   return result;
 }

@@ -50,10 +50,13 @@ existing GameReplayViewer — product board, animations, Void rendering).
 ## What gets recorded
 
 `runs/<run-id>/` contains `run.json` (config), `games/*/events.jsonl`
-(immutable event stream: moves, captures, failures, passes),
+(immutable event stream: moves, captures, failures, passes, per-call usage),
 `games/*/final.json`, and `summary.json` (W/D/L, win reasons, illegal-move
-and format-failure rates per turn, forced passes, tokens incl. cache reads,
-latency).
+and format-failure rates per turn, forced passes, normalized provider usage,
+telemetry coverage, tokenizer-neutral application I/O bytes, and latency).
+Input totals include cached input exactly once. Claude/OpenAI raw token totals
+remain descriptive across providers; the formulas and limits are documented
+in [usage semantics](../../docs/usage-semantics.md).
 
 ## Design notes
 

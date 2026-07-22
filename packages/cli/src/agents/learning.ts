@@ -3,7 +3,8 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { colorName, playerTeam } from "../engine";
-import type { Agent, EndGameInfo, TeamId } from "../types";
+import type { Agent, EndGameInfo, ModelUsage, TeamId } from "../types";
+import { normalizeAnthropicUsage } from "../usage";
 import { claudeCliAgent } from "./cli";
 
 const SKILLS_DIR = path.join(__dirname, "..", "..", "skills");
@@ -111,6 +112,7 @@ export function learningClaudeCliAgent(opts: {
         "Now follow the analysis procedure and reply with ONLY the complete updated strategy document.",
       ].join("\n\n");
 
+      let usageReport: ModelUsage | null = null;
       try {
         const stdout = await runClaude([
           "-p",
@@ -125,6 +127,13 @@ export function learningClaudeCliAgent(opts: {
         ]);
         const parsed = JSON.parse(stdout.trim());
         const text: unknown = parsed?.result;
+        usageReport =
+          normalizeAnthropicUsage(
+            parsed?.usage,
+            "claude-cli",
+            prompt,
+            typeof text === "string" ? text : ""
+          ) ?? null;
         if (typeof text === "string" && text.trim().length > 200) {
           fs.writeFileSync(strategyPath, text.trim() + "\n");
           fs.writeFileSync(
@@ -138,6 +147,7 @@ export function learningClaudeCliAgent(opts: {
       } catch (err: any) {
         console.warn(`  [learn] analysis failed after ${info.gameId}: ${err?.message ?? err}`);
       }
+      return { usageReports: [usageReport] };
     },
   };
 }

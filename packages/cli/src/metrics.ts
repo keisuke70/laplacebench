@@ -1,6 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { GameResult } from "./runner";
+import type { UsageAggregate } from "./types";
+import {
+  blankUsage,
+  isUsageAggregate,
+  legacyUsageFromTeamStats,
+  mergeUsage,
+  usageSummary,
+} from "./usage";
 
 interface AgentAgg {
   games: number;
@@ -15,9 +23,7 @@ interface AgentAgg {
   legalityFailures: number;
   failedTurns: number;
   forcedPasses: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
+  usage: UsageAggregate;
   latencyMs: number;
   plies: number;
 }
@@ -36,9 +42,7 @@ function blank(): AgentAgg {
     legalityFailures: 0,
     failedTurns: 0,
     forcedPasses: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
+    usage: blankUsage(),
     latencyMs: 0,
     plies: 0,
   };
@@ -71,9 +75,10 @@ export function summarize(runDir: string): object {
       agg.legalityFailures += ts.legalityFailures;
       agg.failedTurns += ts.failedTurns;
       agg.forcedPasses += ts.forcedPasses;
-      agg.inputTokens += ts.inputTokens;
-      agg.outputTokens += ts.outputTokens;
-      agg.cacheReadTokens += ts.cacheReadTokens;
+      mergeUsage(
+        agg.usage,
+        isUsageAggregate(ts.usage) ? ts.usage : legacyUsageFromTeamStats(ts)
+      );
       agg.latencyMs += ts.latencyMs;
       agg.plies += r.plies;
     }
@@ -81,6 +86,15 @@ export function summarize(runDir: string): object {
 
   const summary = {
     run_dir: runDir,
+    usage_schema: "laplace-model-usage-v1",
+    usage_comparability: {
+      token_totals:
+        "directly comparable only within the same provider, model, adapter, effort, and harness version",
+      cross_provider:
+        "descriptive only: tokenizers and provider-injected CLI context differ",
+      application_bytes:
+        "tokenizer-neutral LaplaceBench logical-turn I/O only; excludes provider-injected context and hidden reasoning",
+    },
     games: results.length,
     avg_plies:
       results.length > 0
@@ -107,9 +121,12 @@ export function summarize(runDir: string): object {
           failed_turns: a.failedTurns,
           forced_passes: a.forcedPasses,
           turns: a.turns,
-          tokens_in: a.inputTokens,
-          tokens_out: a.outputTokens,
-          tokens_cache_read: a.cacheReadTokens,
+          // Backward-compatible aliases. `tokens_in` is now normalized total
+          // input and includes cached input exactly once.
+          tokens_in: a.usage.inputTotalTokens,
+          tokens_out: a.usage.outputTotalTokens,
+          tokens_cache_read: a.usage.cacheReadTokens,
+          usage: usageSummary(a.usage, { games: a.games, turns: a.turns }),
           avg_latency_ms:
             a.actCalls > 0 ? Math.round(a.latencyMs / a.actCalls) : 0,
         },

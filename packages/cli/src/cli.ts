@@ -1,4 +1,5 @@
 import "./env";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { centerGreedyAgent } from "./agents/centergreedy";
@@ -70,6 +71,18 @@ function splitModelEffort(s: string | undefined): { model?: string; effort?: str
   return { model: model || undefined, effort: effort || undefined };
 }
 
+function commandVersion(command: string): string | null {
+  try {
+    return execFileSync(command, ["--version"], {
+      encoding: "utf8",
+      timeout: 10_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 async function arena(args: Record<string, string | boolean>): Promise<void> {
   const specA = String(args["team-a"] ?? "random");
   const specB = String(args["team-b"] ?? "takeshi");
@@ -98,6 +111,18 @@ async function arena(args: Record<string, string | boolean>): Promise<void> {
         seed,
         max_plies: maxPlies,
         sampling: "provider-default (no temperature control on current models)",
+        usage_schema: "laplace-model-usage-v1",
+        usage_scope: "all adapter calls, including repair and post-game learning calls",
+        cli_versions: {
+          claude:
+            specA.startsWith("claude-cli") || specB.startsWith("claude-cli")
+              ? commandVersion("claude")
+              : null,
+          codex:
+            specA.startsWith("codex-cli") || specB.startsWith("codex-cli")
+              ? commandVersion("codex")
+              : null,
+        },
         started_at: new Date().toISOString(),
       },
       null,
