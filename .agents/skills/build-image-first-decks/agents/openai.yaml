@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image-first Decks"
+  short_description: "Build cinematic image-generated presentation decks"
+  default_prompt: "Use $build-image-first-decks to create a visually consistent image-generated presentation with embedded text and rigorous QA."

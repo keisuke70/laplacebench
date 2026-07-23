@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human Direction Proxy"
+  short_description: "Mimic human direction judgment before implementation planning"
+  default_prompt: "Use $human-direction-proxy to challenge and settle this proposal before writing the plan."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human UI Review"
+  short_description: "Review UI like a real human user"
+  default_prompt: "Use $human-ui-review to review this UI like a real human user."

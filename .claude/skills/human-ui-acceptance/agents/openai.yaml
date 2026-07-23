@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human UI Acceptance"
+  short_description: "Prove UI behavior and human quality separately"
+  default_prompt: "Use $human-ui-acceptance to compile and run evidence-based acceptance for this changed UI journey."
