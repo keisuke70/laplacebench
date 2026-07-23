@@ -62,7 +62,7 @@ Keep the review scope tight:
 - Prefer a concrete file list over "search the repo" wording
 - Limit related files to the minimum needed for the plan, ideally under 12 paths
 - Limit Decision Records to the specific relevant paths, not `docs/decisions/` as a whole
-- Keep `Parent-Adjudication:` concise and limited to the latest round; the shared runner owns any bounded compact/full pilot assignment
+- Keep `Parent-Adjudication:` concise and limited to the latest round; when the ordered block and scoped delta are complete, the shared runner uses delta-scoped same-cycle inspection instead of resending the full prompt
 
 Exception for root-model changes:
 - If the plan moves a source of truth, removes a concept, merges/splits entities, changes ownership, or replaces an old UI/API surface, the reviewer must not be constrained to the enumerated files.

@@ -5,7 +5,6 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  COMPACT_RESUME_PILOT,
   deriveNextApprovalPosition,
   extractLastTurnUsage,
   normalizeReviewUsageObservation,
@@ -86,31 +85,16 @@ for (const invalid of [
   '1. ACCEPT fixed\n2. UNKNOWN no',
   '1. ACCEPT fixed\n2. REJECT no\n3. DEFER extra',
 ]) assert.equal(validOrderedAdjudication(invalid, 2), false);
-const pilotBase = {
-  reviewType: 'impl', sessionKey: 'candidate', approvalCycle: 1,
+const compactBase = {
   previousVerdict: 'NEEDS_CHANGES', previousIssueCount: 1,
   adjudicationBlock: '1. ACCEPT fixed', scopeDelta: { changed: ['x.ts'], added: [], removed: [] },
-  assignedEligibleCycles: 0, now: new Date('2026-07-21T00:00:00Z'),
 };
-const modes = new Set();
-for (let index = 0; index < 100 && modes.size < 2; index += 1) {
-  modes.add(selectResumeInspection({ ...pilotBase, sessionKey: `candidate-${index}` }).resumeInspectionMode);
-}
-assert.deepEqual(modes, new Set(['compact_delta', 'full_control']));
-assert.equal(selectResumeInspection({ ...pilotBase, adjudicationBlock: '' }).resumeInspectionMode, 'full_ineligible');
-assert.equal(selectResumeInspection({ ...pilotBase, now: new Date('2026-07-20T17:59:59Z') }).resumeInspectionMode, 'full_pilot_not_started');
-assert.equal(selectResumeInspection({ ...pilotBase, assignedEligibleCycles: 12 }).resumeInspectionMode, 'full_pilot_stopped');
-assert.equal(selectResumeInspection({ ...pilotBase, assignedEligibleCycles: 12 }).pilotReadyToClose, true);
-assert.notEqual(selectResumeInspection({
-  ...pilotBase, assignedEligibleCycles: 12, currentCycleAlreadyAssigned: true,
-}).resumeInspectionMode, 'full_pilot_stopped');
+assert.equal(selectResumeInspection(compactBase).resumeInspectionMode, 'compact_delta');
+assert.equal(selectResumeInspection({ ...compactBase, adjudicationBlock: '' }).resumeInspectionMode, 'full_ineligible');
+assert.equal(selectResumeInspection({ ...compactBase, scopeDelta: { changed: [], added: [], removed: [] } }).resumeInspectionMode, 'full_ineligible');
 assert.equal(selectResumeInspection({
-  ...pilotBase, currentCycleAlreadyAssigned: true, pilotDisabled: true,
-}).resumeInspectionMode, 'full_pilot_stopped');
-assert.equal(selectResumeInspection({
-  ...pilotBase, historyIntegrityOk: false,
+  ...compactBase, historyIntegrityOk: false,
 }).resumeInspectionMode, 'full_history_gap');
-assert.equal(selectResumeInspection({ ...pilotBase, now: new Date(COMPACT_RESUME_PILOT.expiresAt) }).resumeInspectionMode, 'full_pilot_stopped');
 
 // End-to-end runner fixture: fake Codex emits cumulative totals across resumes.
 const sourceDir = path.dirname(fileURLToPath(import.meta.url));
@@ -210,15 +194,7 @@ process.stdin.on('end', () => {
   assert.equal(failedGapMetrics[2].reviewUsage.accountingGapReason, 'unavailable_after_usage_gap');
   assert.equal(failedGapMetrics[2].reviewUsage.normalizedDelta, null);
 
-  let compactSession = '';
-  for (let index = 0; index < 100; index += 1) {
-    const candidate = `compact-${index}`;
-    if (selectResumeInspection({ ...pilotBase, sessionKey: candidate }).resumeInspectionMode === 'compact_delta') {
-      compactSession = candidate;
-      break;
-    }
-  }
-  assert.ok(compactSession);
+  const compactSession = 'compact';
   await fs.writeFile(counterFile, '0');
   const scopedFile = path.join(project, 'scoped.md');
   await fs.writeFile(scopedFile, 'before\n');
@@ -237,49 +213,34 @@ process.stdin.on('end', () => {
   });
   assert.equal(compactRun.status, 0, compactRun.stderr);
   const compactInput = await fs.readFile(inputCapture, 'utf8');
-  assert.match(compactInput, /Delta-scoped inspection pilot/);
+  assert.match(compactInput, /Delta-scoped inspection:/);
   assert.doesNotMatch(compactInput, /FULL-PROMPT-MARKER/);
   const compactMetrics = (await fs.readFile(path.join(project, '.agents', 'state', `codex-impl-${compactSession}.result.jsonl`), 'utf8'))
     .trim().split('\n').map(JSON.parse);
   assert.equal(compactMetrics[1].resumeInspectionMode, 'compact_delta');
-  assert.equal(compactMetrics[1].pilotEligible, true);
 
-  let controlSession = '';
-  for (let index = 0; index < 100; index += 1) {
-    const candidate = `control-${index}`;
-    if (selectResumeInspection({ ...pilotBase, sessionKey: candidate }).resumeInspectionMode === 'full_control') {
-      controlSession = candidate;
-      break;
-    }
-  }
-  assert.ok(controlSession);
   await fs.writeFile(counterFile, '0');
-  await fs.writeFile(scopedFile, 'control-before\n');
-  const firstControl = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', controlSession], {
-    cwd: project, env, input: `FULL-CONTROL-MARKER\n- ${scopedFile}\n`, encoding: 'utf8',
+  const fullSession = 'full-ineligible';
+  await fs.writeFile(scopedFile, 'unchanged\n');
+  const firstFull = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', fullSession], {
+    cwd: project, env, input: `FULL-INELIGIBLE-MARKER\n- ${scopedFile}\n`, encoding: 'utf8',
   });
-  assert.equal(firstControl.status, 0, firstControl.stderr);
-  await fs.writeFile(scopedFile, 'control-after\n');
-  const controlCapture = path.join(tempRoot, 'control-stdin-capture');
-  const controlRun = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', controlSession], {
+  assert.equal(firstFull.status, 0, firstFull.stderr);
+  const fullCapture = path.join(tempRoot, 'full-stdin-capture');
+  const fullRun = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', fullSession], {
     cwd: project,
-    env: { ...env, FAKE_CODEX_STDIN_CAPTURE: controlCapture },
-    input: `FULL-CONTROL-MARKER\n- ${scopedFile}\nParent-Adjudication:\n1. ACCEPT fixed\nValidation:\n- focused test passed\n`,
+    env: { ...env, FAKE_CODEX_STDIN_CAPTURE: fullCapture },
+    input: `FULL-INELIGIBLE-MARKER\n- ${scopedFile}\nParent-Adjudication:\n1. ACCEPT fixed\nValidation:\n- no scoped file changed\n`,
     encoding: 'utf8',
   });
-  assert.equal(controlRun.status, 0, controlRun.stderr);
-  assert.match(await fs.readFile(controlCapture, 'utf8'), /FULL-CONTROL-MARKER/);
+  assert.equal(fullRun.status, 0, fullRun.stderr);
+  assert.match(await fs.readFile(fullCapture, 'utf8'), /FULL-INELIGIBLE-MARKER/);
+  const fullMetrics = (await fs.readFile(path.join(project, '.agents', 'state', `codex-impl-${fullSession}.result.jsonl`), 'utf8'))
+    .trim().split('\n').map(JSON.parse);
+  assert.equal(fullMetrics[1].resumeInspectionMode, 'full_ineligible');
 
   await fs.writeFile(counterFile, '0');
-  let failedCompactSession = '';
-  for (let index = 0; index < 100; index += 1) {
-    const candidate = `failed-compact-${index}`;
-    if (selectResumeInspection({ ...pilotBase, sessionKey: candidate }).resumeInspectionMode === 'compact_delta') {
-      failedCompactSession = candidate;
-      break;
-    }
-  }
-  assert.ok(failedCompactSession);
+  const failedCompactSession = 'failed-compact';
   await fs.writeFile(scopedFile, 'failure-before\n');
   const firstFailedCompact = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', failedCompactSession], {
     cwd: project, env, input: `- ${scopedFile}\n`, encoding: 'utf8',
@@ -309,15 +270,7 @@ process.stdin.on('end', () => {
   assert.equal(compactRetryMetrics[2].resumeInspectionMode, 'compact_delta');
 
   await fs.writeFile(counterFile, '0');
-  let resetSession = '';
-  for (let index = 0; index < 100; index += 1) {
-    const candidate = `reset-compact-${index}`;
-    if (selectResumeInspection({ ...pilotBase, sessionKey: candidate }).resumeInspectionMode === 'compact_delta') {
-      resetSession = candidate;
-      break;
-    }
-  }
-  assert.ok(resetSession);
+  const resetSession = 'reset-compact';
   await fs.writeFile(scopedFile, 'reset-before\n');
   const firstReset = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', resetSession], {
     cwd: project, env, input: `- ${scopedFile}\n`, encoding: 'utf8',
@@ -334,31 +287,6 @@ process.stdin.on('end', () => {
   const resetMetrics = (await fs.readFile(path.join(project, '.agents', 'state', `codex-impl-${resetSession}.result.jsonl`), 'utf8'))
     .trim().split('\n').map(JSON.parse);
   assert.deepEqual(resetMetrics.slice(1).map((record) => record.resumeInspectionMode), ['compact_delta', 'full_reset_fallback']);
-  assert.equal(resetMetrics[2].pilotArm, 'compact_delta');
-  assert.equal(resetMetrics[2].pilotCycleKey, resetMetrics[1].pilotCycleKey);
-
-  await fs.writeFile(counterFile, '0');
-  const disabledSession = 'pilot-disabled';
-  await fs.writeFile(scopedFile, 'disabled-before\n');
-  const firstDisabled = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', disabledSession], {
-    cwd: project, env, input: `- ${scopedFile}\n`, encoding: 'utf8',
-  });
-  assert.equal(firstDisabled.status, 0, firstDisabled.stderr);
-  await fs.writeFile(scopedFile, 'disabled-after\n');
-  const disableMarker = path.join(project, '.agents', 'state', `${COMPACT_RESUME_PILOT.id}.disabled`);
-  await fs.writeFile(disableMarker, 'known miss\n');
-  const disabledRun = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', disabledSession], {
-    cwd: project,
-    env,
-    input: `- ${scopedFile}\nParent-Adjudication:\n1. ACCEPT fixed\nValidation:\n- focused test passed\n`,
-    encoding: 'utf8',
-  });
-  assert.equal(disabledRun.status, 0, disabledRun.stderr);
-  const disabledMetrics = (await fs.readFile(path.join(project, '.agents', 'state', `codex-impl-${disabledSession}.result.jsonl`), 'utf8'))
-    .trim().split('\n').map(JSON.parse);
-  assert.equal(disabledMetrics[1].resumeInspectionMode, 'full_pilot_stopped');
-  assert.equal(disabledMetrics[1].pilotReadyToClose, true);
-  await fs.unlink(disableMarker);
 
   await fs.writeFile(counterFile, '0');
   const localGapSession = 'local-history-gap';
@@ -383,27 +311,31 @@ process.stdin.on('end', () => {
     try { JSON.parse(line); return true; } catch { return false; }
   }).join('\n')}\n`);
 
-  await fs.writeFile(counterFile, '0');
-  const globalGapSession = 'global-history-gap';
-  await fs.writeFile(scopedFile, 'global-gap-before\n');
-  const firstGlobalGap = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', globalGapSession], {
-    cwd: project, env, input: `- ${scopedFile}\n`, encoding: 'utf8',
-  });
-  assert.equal(firstGlobalGap.status, 0, firstGlobalGap.stderr);
-  await fs.writeFile(scopedFile, 'global-gap-after\n');
-  const brokenGlobalMetrics = path.join(project, '.agents', 'state', 'codex-impl-unrelated-broken.result.jsonl');
-  await fs.writeFile(brokenGlobalMetrics, '{malformed\n');
-  const globalGapRun = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', globalGapSession], {
-    cwd: project,
-    env,
-    input: `- ${scopedFile}\nParent-Adjudication:\n1. ACCEPT fixed\nValidation:\n- global history gap must retain full review\n`,
-    encoding: 'utf8',
-  });
-  assert.equal(globalGapRun.status, 0, globalGapRun.stderr);
-  const globalGapMetrics = (await fs.readFile(path.join(project, '.agents', 'state', `codex-impl-${globalGapSession}.result.jsonl`), 'utf8'))
-    .trim().split('\n').map(JSON.parse);
-  assert.equal(globalGapMetrics[1].resumeInspectionMode, 'full_history_gap');
-  await fs.unlink(brokenGlobalMetrics);
+  for (const [session, removeHistory] of [
+    ['missing-history', true],
+    ['unrecorded-result', false],
+  ]) {
+    await fs.writeFile(counterFile, '0');
+    await fs.writeFile(scopedFile, `${session}-before\n`);
+    const first = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', session], {
+      cwd: project, env, input: `- ${scopedFile}\n`, encoding: 'utf8',
+    });
+    assert.equal(first.status, 0, first.stderr);
+    await fs.writeFile(scopedFile, `${session}-after\n`);
+    const metricsPath = path.join(project, '.agents', 'state', `codex-impl-${session}.result.jsonl`);
+    if (removeHistory) await fs.unlink(metricsPath);
+    else await fs.writeFile(metricsPath, '');
+    const resume = spawnSync(process.execPath, [path.join(scriptDir, 'run-codex-review.mjs'), 'impl', session], {
+      cwd: project,
+      env,
+      input: `- ${scopedFile}\nParent-Adjudication:\n1. ACCEPT fixed\nValidation:\n- incomplete local history must retain full review\n`,
+      encoding: 'utf8',
+    });
+    assert.equal(resume.status, 0, resume.stderr);
+    const records = (await fs.readFile(metricsPath, 'utf8')).trim().split('\n').map(JSON.parse);
+    assert.equal(records.at(-1).resumeInspectionMode, 'full_history_gap');
+  }
+
 } finally {
   await fs.rm(tempRoot, { recursive: true, force: true });
 }

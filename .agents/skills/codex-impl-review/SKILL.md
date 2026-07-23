@@ -61,7 +61,7 @@ Keep the review scope tight:
 - Limit target files to the minimum needed for the review, ideally 3-10 paths and at most 15
 - Limit Decision Records to the specific relevant paths, not `docs/decisions/` as a whole
 - Ask the reviewer to read only minimal neighboring files needed to validate a claim
-- Keep `Parent-Adjudication:` concise and limited to the latest round; the shared runner owns any bounded compact/full pilot assignment
+- Keep `Parent-Adjudication:` concise and limited to the latest round; when the ordered block and scoped delta are complete, the shared runner uses delta-scoped same-cycle inspection instead of resending the full prompt
 
 Default review stance for early-stage development:
 - Do not assume backward compatibility, legacy fallbacks, or old/new dual-path support are required just because the previous version worked that way.

@@ -6,7 +6,6 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
-  COMPACT_RESUME_PILOT,
   deriveNextApprovalPosition,
   extractLastTurnUsage,
   normalizeReviewUsageObservation,
@@ -55,7 +54,6 @@ const repoRoot =
     ? sourceRepoRoot
     : projectRepoRoot;
 const stateDir = path.join(repoRoot, '.agents', 'state');
-const pilotDisableFile = path.join(stateDir, `${COMPACT_RESUME_PILOT.id}.disabled`);
 const schemaCandidates = [
   path.join(scriptDir, 'review-schema.json'),
   path.join(repoRoot, 'skills', 'core', 'review-schema.json'),
@@ -350,7 +348,7 @@ Re-review instructions:
     : '';
 
   const compactInstructions = inspectionMode === 'compact_delta'
-    ? `Delta-scoped inspection pilot:
+    ? `Delta-scoped inspection:
 - The original intent, scope, and fixed checks remain in this native review thread; do not ask for them to be resent.
 - Verify every previous issue against its ordered parent disposition and the changed/new/removed files below.
 - Inspect unchanged files only when they are direct evidence for a previous issue or a dependency changed by this delta.
@@ -731,49 +729,31 @@ async function finalizeRun(result) {
   return { parsed, threadId };
 }
 
-async function readResultMetrics() {
+async function readResultMetrics(expectedResult = null) {
   const records = [];
+  let integrityOk = true;
   try {
     const text = await fs.readFile(resultMetricsFile, 'utf8');
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue;
       try { records.push(JSON.parse(line)); }
-      catch { records.push({ status: 'malformed', malformed: true }); }
-    }
-  } catch {}
-  return records;
-}
-
-async function collectPilotAssignedCycleKeys() {
-  const cycleKeys = new Set();
-  let integrityOk = true;
-  try {
-    for (const file of await fs.readdir(stateDir)) {
-      if (!/^codex-(plan|impl)-.+\.result\.jsonl$/.test(file)) continue;
-      let text = '';
-      try { text = await fs.readFile(path.join(stateDir, file), 'utf8'); }
-      catch { integrityOk = false; continue; }
-      for (const line of text.split(/\r?\n/)) {
-        if (!line.trim()) continue;
-        try {
-          const record = JSON.parse(line);
-          const pilotArm = record.pilotArm
-            ?? (['compact_delta', 'full_control'].includes(record.resumeInspectionMode)
-              ? record.resumeInspectionMode
-              : null);
-          const hasPilotArm = ['compact_delta', 'full_control'].includes(pilotArm);
-          if (record.pilotId === COMPACT_RESUME_PILOT.id && hasPilotArm) {
-            if (typeof record.pilotCycleKey === 'string') cycleKeys.add(record.pilotCycleKey);
-            else integrityOk = false;
-          }
-          if (record.pilotId === COMPACT_RESUME_PILOT.id
-            && ['compact_delta', 'full_control', 'full_reset_fallback'].includes(record.resumeInspectionMode)
-            && !hasPilotArm) integrityOk = false;
-        } catch { integrityOk = false; }
+      catch {
+        integrityOk = false;
+        records.push({ status: 'malformed', malformed: true });
       }
     }
-  } catch { integrityOk = false; }
-  return { cycleKeys, integrityOk };
+  } catch {
+    integrityOk = expectedResult === null;
+  }
+  if (expectedResult) {
+    const matchingRecord = records.some((record) => (
+      record.runToken === expectedResult.runToken
+      && record.status === expectedResult.status
+      && (expectedResult.status !== 'completed' || record.verdict === expectedResult.payload?.verdict)
+    ));
+    if (!matchingRecord) integrityOk = false;
+  }
+  return { records, integrityOk };
 }
 
 async function observeReviewUsage(result, runMode, observedThreadId) {
@@ -878,7 +858,7 @@ async function recordResult(status, payload = {}, reviewUsage = null, resumeInsp
 
   const completedAt = new Date().toISOString();
   const parsed = payload?.payload ?? null;
-  const approvalPosition = deriveNextApprovalPosition(await readResultMetrics());
+  const approvalPosition = deriveNextApprovalPosition((await readResultMetrics()).records);
   const approvalRoundCompleted = status === 'completed'
     && ['APPROVED', 'NEEDS_CHANGES'].includes(parsed?.verdict);
   const reviewMetrics = {
@@ -889,14 +869,6 @@ async function recordResult(status, payload = {}, reviewUsage = null, resumeInsp
     historyGapCount: approvalPosition.historyGapCount,
     reviewUsage,
     resumeInspectionMode: resumeInspection?.resumeInspectionMode ?? 'fresh',
-    pilotArm: resumeInspection?.pilotArm
-      ?? (['compact_delta', 'full_control'].includes(resumeInspection?.resumeInspectionMode)
-        ? resumeInspection.resumeInspectionMode
-        : null),
-    pilotId: resumeInspection?.pilotId ?? null,
-    pilotCycleKey: resumeInspection?.pilotCycleKey ?? null,
-    pilotEligible: resumeInspection?.pilotEligible ?? false,
-    pilotReadyToClose: resumeInspection?.pilotReadyToClose ?? false,
   };
   await writeJsonFile(resultFile, {
     status,
@@ -970,27 +942,15 @@ try {
     try {
       const sessionId = (await fs.readFile(sessionFile, 'utf8')).trim();
       if (sessionId) {
-        const approvalPosition = deriveNextApprovalPosition(await readResultMetrics());
-        const pilotCycleKey = `${COMPACT_RESUME_PILOT.id}/${reviewType}/${sessionKey}/${approvalPosition.approvalCycle}`;
-        const assignedPilotCycles = await collectPilotAssignedCycleKeys();
+        const metricsState = await readResultMetrics(previousResult);
+        const approvalPosition = deriveNextApprovalPosition(metricsState.records);
         const resumeInspection = selectResumeInspection({
-          reviewType,
-          sessionKey,
-          approvalCycle: approvalPosition.approvalCycle,
           previousVerdict: previousPayload?.verdict ?? null,
           previousIssueCount: previousPayload?.issues?.length ?? 0,
           adjudicationBlock: previousAdjudication,
           scopeDelta,
-          assignedEligibleCycles: assignedPilotCycles.cycleKeys.size,
-          currentCycleAlreadyAssigned: assignedPilotCycles.cycleKeys.has(pilotCycleKey),
-          pilotDisabled: existsSync(pilotDisableFile),
-          historyIntegrityOk: approvalPosition.historyGapCount === 0 && assignedPilotCycles.integrityOk,
+          historyIntegrityOk: metricsState.integrityOk && approvalPosition.historyGapCount === 0,
         });
-        if (resumeInspection.pilotReadyToClose) {
-          process.stderr.write(
-            `[run-codex-review] compact-resume pilot ready to close; full review retained; complete ${COMPACT_RESUME_PILOT.id} via docs/plans/2026-07-21-review-compact-resume-pilot.md\n`,
-          );
-        }
         const result = await runCodex(
           codexCommand,
           schemaPath,
@@ -1014,10 +974,6 @@ try {
           }, reviewUsage, resumeInspection);
           await fs.rm(sessionFile, { force: true });
           const fallbackInspection = {
-            ...resumeInspection,
-            pilotArm: ['compact_delta', 'full_control'].includes(resumeInspection.resumeInspectionMode)
-              ? resumeInspection.resumeInspectionMode
-              : null,
             resumeInspectionMode: 'full_reset_fallback',
           };
           if (await runFresh(fallbackInspection)) {

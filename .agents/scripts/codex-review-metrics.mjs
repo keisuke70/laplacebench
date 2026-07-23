@@ -5,22 +5,6 @@ export const REVIEW_USAGE_FIELDS = [
   'reasoning_output_tokens',
 ];
 
-export const COMPACT_RESUME_PILOT = {
-  id: 'same-cycle-delta-v1',
-  startsAt: '2026-07-20T18:00:00.000Z',
-  expiresAt: '2026-07-27T15:00:00.000Z',
-  minimumEligibleCycles: 12,
-};
-
-function stableBucket(value) {
-  let hash = 2166136261;
-  for (const char of value) {
-    hash ^= char.codePointAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) % 2;
-}
-
 export function hasScopedChanges(scopeDelta) {
   return ['changed', 'added', 'removed'].some((field) => (scopeDelta?.[field]?.length ?? 0) > 0);
 }
@@ -36,51 +20,18 @@ export function validOrderedAdjudication(block, issueCount) {
 }
 
 export function selectResumeInspection({
-  reviewType,
-  sessionKey,
-  approvalCycle,
   previousVerdict,
   previousIssueCount,
   adjudicationBlock,
   scopeDelta,
-  assignedEligibleCycles,
-  currentCycleAlreadyAssigned = false,
-  pilotDisabled = false,
   historyIntegrityOk = true,
-  now = new Date(),
 }) {
-  const cycleKey = `${COMPACT_RESUME_PILOT.id}/${reviewType}/${sessionKey}/${approvalCycle}`;
-  const base = {
-    pilotId: COMPACT_RESUME_PILOT.id,
-    pilotCycleKey: cycleKey,
-    pilotEligible: false,
-    pilotReadyToClose: false,
-  };
   const eligible = previousVerdict === 'NEEDS_CHANGES'
     && validOrderedAdjudication(adjudicationBlock, previousIssueCount)
     && hasScopedChanges(scopeDelta);
-  if (!eligible) return { ...base, resumeInspectionMode: 'full_ineligible' };
-
-  const notStarted = now.getTime() < new Date(COMPACT_RESUME_PILOT.startsAt).getTime();
-  if (notStarted) return { ...base, resumeInspectionMode: 'full_pilot_not_started' };
-  if (!historyIntegrityOk) return { ...base, resumeInspectionMode: 'full_history_gap' };
-
-  const expired = now.getTime() >= new Date(COMPACT_RESUME_PILOT.expiresAt).getTime();
-  const sampleReached = assignedEligibleCycles >= COMPACT_RESUME_PILOT.minimumEligibleCycles;
-  if (pilotDisabled || ((expired || sampleReached) && !currentCycleAlreadyAssigned)) {
-    return {
-      ...base,
-      pilotEligible: true,
-      pilotReadyToClose: true,
-      resumeInspectionMode: 'full_pilot_stopped',
-    };
-  }
-
-  return {
-    ...base,
-    pilotEligible: true,
-    resumeInspectionMode: stableBucket(cycleKey) === 0 ? 'compact_delta' : 'full_control',
-  };
+  if (!eligible) return { resumeInspectionMode: 'full_ineligible' };
+  if (!historyIntegrityOk) return { resumeInspectionMode: 'full_history_gap' };
+  return { resumeInspectionMode: 'compact_delta' };
 }
 
 export function normalizeRawUsageShape(value) {
