@@ -8,7 +8,7 @@ import { greedyAgent } from "./agents/greedy";
 import { randomAgent } from "./agents/random";
 import { takeshiAgent } from "./agents/takeshi";
 import { summarize } from "./metrics";
-import { playGame } from "./runner";
+import { playGame, resolveMaxPlies } from "./runner";
 import type { Agent } from "./types";
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -83,13 +83,13 @@ function commandVersion(command: string): string | null {
   }
 }
 
-async function arena(args: Record<string, string | boolean>): Promise<void> {
+export async function arena(args: Record<string, string | boolean>): Promise<void> {
   const specA = String(args["team-a"] ?? "random");
   const specB = String(args["team-b"] ?? "takeshi");
   const games = parseInt(String(args["games"] ?? "2"), 10);
   const swap = Boolean(args["swap"]);
   const seed = parseInt(String(args["seed"] ?? "42"), 10);
-  const maxPlies = parseInt(String(args["max-plies"] ?? "300"), 10);
+  const maxPlies = resolveMaxPlies(args["max-plies"]);
   const turnTimeoutMs = parseInt(
     String(args["turn-timeout-ms"] ?? "300000"),
     10
@@ -229,13 +229,21 @@ async function main(): Promise<void> {
     }
   } else {
     console.log(
-      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
+      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n  --max-plies N            default 100 (canonical cap for laplace-8x8-v1 matches)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
     );
     process.exitCode = 1;
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+// Guarded so tests can import arena() without executing the CLI entry point.
+// The packaged binary (bin/laplacebench.js) calls runCli() explicitly.
+export function runCli(): void {
+  main().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}
+
+if (require.main === module) {
+  runCli();
+}

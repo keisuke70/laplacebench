@@ -6,3 +6,4 @@ packages/cli/runs/
 .env.*
 .DS_Store
 .claude/
+.agents/state/

@@ -9,6 +9,8 @@ interface Agg {
   losses: number;
   centerWins: number;
   elimWins: number;
+  horizonDraws: number;
+  repetitionDraws: number;
   errors: number;
   turns: number;
 }
@@ -22,7 +24,7 @@ export function standingsMarkdown(runDirs: string[]): string {
   const row = (agent: string): Agg => {
     let r = rows.get(agent);
     if (!r) {
-      r = { agent, games: 0, wins: 0, draws: 0, losses: 0, centerWins: 0, elimWins: 0, errors: 0, turns: 0 };
+      r = { agent, games: 0, wins: 0, draws: 0, losses: 0, centerWins: 0, elimWins: 0, horizonDraws: 0, repetitionDraws: 0, errors: 0, turns: 0 };
       rows.set(agent, r);
     }
     return r;
@@ -43,8 +45,11 @@ export function standingsMarkdown(runDirs: string[]): string {
         const t = fin.teams[team];
         const r = row(t.agent);
         r.games++;
-        if (fin.winner === null) r.draws++;
-        else if (fin.winner === team) {
+        if (fin.winner === null) {
+          r.draws++;
+          if (fin.reason === "horizon_draw") r.horizonDraws++;
+          if (fin.reason === "repetition_draw") r.repetitionDraws++;
+        } else if (fin.winner === team) {
           r.wins++;
           if (fin.reason === "center") r.centerWins++;
           if (fin.reason === "elimination") r.elimWins++;
@@ -65,11 +70,11 @@ export function standingsMarkdown(runDirs: string[]): string {
     `${gameCount} games across ${runCount} run(s). Regenerate with:`,
     "`laplacebench standings community/runs/* --out community/STANDINGS.md`",
     ``,
-    `| agent | G | W | D | L | center | elim | err/turn |`,
-    `|---|---|---|---|---|---|---|---|`,
+    `| agent | G | W | D | L | center | elim | D:horizon | D:repetition | err/turn |`,
+    `|---|---|---|---|---|---|---|---|---|---|`,
     ...sorted.map(
       (r) =>
-        `| \`${r.agent}\` | ${r.games} | ${r.wins} | ${r.draws} | ${r.losses} | ${r.centerWins} | ${r.elimWins} | ${r.turns > 0 ? (r.errors / r.turns).toFixed(3) : "-"} |`
+        `| \`${r.agent}\` | ${r.games} | ${r.wins} | ${r.draws} | ${r.losses} | ${r.centerWins} | ${r.elimWins} | ${r.horizonDraws} | ${r.repetitionDraws} | ${r.turns > 0 ? (r.errors / r.turns).toFixed(3) : "-"} |`
     ),
     ``,
     `Conditions (model, effort, harness) are labeled in agent names; small samples.`,

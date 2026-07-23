@@ -7,6 +7,7 @@ import {
   legalMoves,
   newGame,
   playerTeam,
+  repetitionKey,
   winReason,
 } from "./engine";
 import type { Agent, RecentEvent, TeamId, UsageAggregate } from "./types";
@@ -35,7 +36,7 @@ export interface GameResult {
   ruleset: string;
   seed: number;
   winner: TeamId | null;
-  reason: "center" | "elimination" | "horizon_draw";
+  reason: "center" | "elimination" | "horizon_draw" | "repetition_draw";
   plies: number;
   losses: Record<string, number>;
   teams: Record<TeamId, TeamStats>;
@@ -54,6 +55,47 @@ export interface GameConfig {
 }
 
 const RULESET = "laplace-8x8-v1";
+
+/**
+ * Canonical ply cap for laplace-8x8-v1 bench matches — provisional-canonical
+ * for the stage-0.5 pilot; final v1 freeze happens after the pilot's
+ * horizon-draw rate is reviewed. See docs/match-conduct-laplace-8x8-v1.md.
+ */
+export const CANONICAL_MAX_PLIES = 100;
+
+/** Third occurrence of the same game-relevant state ends the game as a draw. */
+export const REPETITION_DRAW_OCCURRENCES = 3;
+
+/** CLI `--max-plies` resolution: omission selects the canonical cap. */
+export function resolveMaxPlies(raw: unknown): number {
+  if (raw === undefined) return CANONICAL_MAX_PLIES;
+  const s = String(raw);
+  if (!/^\d+$/.test(s)) {
+    throw new Error("--max-plies must be a positive integer");
+  }
+  const n = parseInt(s, 10);
+  if (!Number.isSafeInteger(n) || n <= 0) {
+    throw new Error("--max-plies must be a positive integer");
+  }
+  return n;
+}
+
+/**
+ * Per-iteration termination decision. Pure so the precedence invariant
+ * (normal end > repetition draw > horizon draw) is pinned by unit tests even
+ * for combinations real play cannot reach.
+ */
+export function classifyTermination(input: {
+  gameEnded: boolean;
+  occurrences: number;
+  ply: number;
+  maxPlies: number;
+}): "normal_end" | "repetition_draw" | "horizon_draw" | null {
+  if (input.gameEnded) return "normal_end";
+  if (input.occurrences >= REPETITION_DRAW_OCCURRENCES) return "repetition_draw";
+  if (input.ply >= input.maxPlies) return "horizon_draw";
+  return null;
+}
 
 function newTeamStats(agent: Agent): TeamStats {
   return {
@@ -119,7 +161,34 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
     recent.B.push(e);
   };
 
-  while (!manager.state.gameEndedAt && ply < cfg.maxPlies) {
+  // Termination precedence per docs/plans/2026-07-24-freeze-draw-rules.md:
+  // normal end (center/elimination) > repetition draw > horizon draw. The
+  // repetition count applies to every reached nonterminal state — including
+  // the one produced by the last permitted ply, which the old
+  // `ply < maxPlies` loop condition would misclassify as a horizon draw.
+  const repetitionCounts = new Map<string, number>();
+  let repetitionDraw = false;
+
+  while (true) {
+    const gameEnded = !!manager.state.gameEndedAt;
+    let occurrences = 0;
+    if (!gameEnded) {
+      const stateKey = repetitionKey(manager.state);
+      occurrences = (repetitionCounts.get(stateKey) ?? 0) + 1;
+      repetitionCounts.set(stateKey, occurrences);
+    }
+    const termination = classifyTermination({
+      gameEnded,
+      occurrences,
+      ply,
+      maxPlies: cfg.maxPlies,
+    });
+    if (termination === "repetition_draw") {
+      repetitionDraw = true;
+      emit({ t: "repetition_draw", ply, occurrences });
+    }
+    if (termination !== null) break;
+
     const state = manager.state;
     const actingPlayer = state.currentPlayer;
     const team = playerTeam(actingPlayer);
@@ -319,8 +388,10 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
   }
 
   const finalState = manager.state;
-  const horizon = !finalState.gameEndedAt;
-  const reason = winReason(finalState, horizon) ?? "horizon_draw";
+  const horizon = !finalState.gameEndedAt && !repetitionDraw;
+  const reason: GameResult["reason"] = repetitionDraw
+    ? "repetition_draw"
+    : winReason(finalState, horizon) ?? "horizon_draw";
   const losses: Record<string, number> = {};
   for (let p = 1; p <= 4; p++) losses[colorName(p)] = finalState.capturedPieces[p - 1];
 

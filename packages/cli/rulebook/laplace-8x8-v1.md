@@ -142,3 +142,7 @@ A team wins immediately when either condition holds:
   A color whose only pieces are gone is skipped from then on.
 - If the game reaches the maximum ply limit stated at game start, it
   ends as a draw.
+- If the exact same game situation (board including Void status, the
+  color about to act, every color's accumulated losses, eliminations,
+  and pending forfeit counts) occurs for the third time, the game ends
+  as a draw at that moment.

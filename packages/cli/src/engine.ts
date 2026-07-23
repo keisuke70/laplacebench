@@ -74,6 +74,57 @@ export function boardRows(state: GameState): string[] {
   );
 }
 
+/**
+ * Repetition-key field classification over the ENTIRE GameState. Exhaustive
+ * by construction: the Record over keyof GameState fails typecheck when the
+ * vendored state shape gains a field, and repetitionKey throws on any runtime
+ * key this map does not know, so an intentional core sync cannot silently
+ * skew repetition detection. Excluded fields are timing, display, or
+ * terminal metadata only (docs/plans/2026-07-24-freeze-draw-rules.md).
+ */
+const REPETITION_KEY_FIELDS: Record<keyof GameState, "include" | "exclude"> = {
+  board: "include",
+  boardSize: "include",
+  capturedPieces: "include",
+  eliminatedPlayers: "include",
+  startingPiecesCount: "include",
+  eliminationThreshold: "include",
+  currentPlayer: "include",
+  consecutiveTimeouts: "include",
+  turnStartedAt: "exclude",
+  turnTimeLimit: "exclude",
+  gameStartedAt: "exclude",
+  gameEndedAt: "exclude",
+  winningTeam: "exclude",
+  lastMoveBy: "exclude",
+  lastMoveAt: "exclude",
+  lastMove: "exclude",
+};
+
+/** Canonical serialization of the game-relevant state for repetition draws. */
+export function repetitionKey(state: GameState): string {
+  const included: Record<string, unknown> = {};
+  for (const key of Object.keys(state).sort()) {
+    const cls = (REPETITION_KEY_FIELDS as Record<string, string | undefined>)[
+      key
+    ];
+    if (cls === undefined) {
+      throw new Error(`repetitionKey: unclassified GameState field "${key}"`);
+    }
+    if (cls !== "include") continue;
+    if (key === "board") {
+      // Cells may carry isDead as absent, false, or true; normalize so
+      // semantically equal boards serialize identically.
+      included[key] = state.board.map((row) =>
+        row.map((cell) => (cell ? [cell.player, cell.isDead ? 1 : 0] : 0))
+      );
+    } else {
+      included[key] = (state as unknown as Record<string, unknown>)[key];
+    }
+  }
+  return JSON.stringify(included);
+}
+
 export function winReason(
   state: GameState,
   horizonReached: boolean

@@ -22,7 +22,7 @@ npx tsx src/cli.ts arena --team-a takeshi --team-b greedy --games 2 --swap
 # LLM vs baseline (needs ANTHROPIC_API_KEY)
 export ANTHROPIC_API_KEY=sk-ant-...
 npx tsx src/cli.ts arena --team-a anthropic:opus --team-b takeshi \
-  --games 2 --swap --max-plies 200
+  --games 2 --swap
 
 # re-summarize a finished run
 npx tsx src/cli.ts summarize runs/<run-id>
@@ -80,4 +80,8 @@ the match wallet and match usage summary.
   caching on the system rulebook + newest turn; adaptive thinking; no
   sampling params (rejected by current models); deliberately no refusal
   fallbacks — failures must score against the model under test.
-- Draws: horizon cap (`--max-plies`, default 300). No repetition rule yet.
+- Draws: horizon cap (`--max-plies`, default 100 — the canonical
+  laplace-8x8-v1 cap, see `docs/match-conduct-laplace-8x8-v1.md`) as
+  `horizon_draw`, and threefold repetition of the same game-relevant
+  state as `repetition_draw`. Draw rates are reported separately by
+  cause in summaries and standings. No adjudication of truncated games.

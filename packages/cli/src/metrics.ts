@@ -16,6 +16,7 @@ interface AgentAgg {
   draws: number;
   losses: number;
   winReasons: Record<string, number>;
+  drawReasons: Record<string, number>;
   turns: number;
   moves: number;
   actCalls: number;
@@ -37,6 +38,7 @@ function blank(): AgentAgg {
     draws: 0,
     losses: 0,
     winReasons: {},
+    drawReasons: {},
     turns: 0,
     moves: 0,
     actCalls: 0,
@@ -67,8 +69,10 @@ export function summarize(runDir: string): object {
       const ts = r.teams[team];
       const agg = (agents[ts.agent] ??= blank());
       agg.games++;
-      if (r.winner === null) agg.draws++;
-      else if (r.winner === team) {
+      if (r.winner === null) {
+        agg.draws++;
+        agg.drawReasons[r.reason] = (agg.drawReasons[r.reason] ?? 0) + 1;
+      } else if (r.winner === team) {
         agg.wins++;
         agg.winReasons[r.reason] = (agg.winReasons[r.reason] ?? 0) + 1;
       } else agg.losses++;
@@ -120,6 +124,10 @@ export function summarize(runDir: string): object {
         {
           record: `${a.wins}W-${a.draws}D-${a.losses}L`,
           win_reasons: a.winReasons,
+          // Draw rates are reported separately by cause (strategy §4-3):
+          // horizon_draw (ply cap) vs repetition_draw (threefold repetition).
+          draw_reasons: a.drawReasons,
+          draw_rate: a.games > 0 ? +(a.draws / a.games).toFixed(3) : 0,
           illegal_rate_per_turn:
             a.turns > 0 ? +(a.legalityFailures / a.turns).toFixed(3) : 0,
           format_failure_rate_per_turn:
