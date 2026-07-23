@@ -301,6 +301,23 @@ For v0.1, freeze the existing 8x8 product behavior under the immutable ID
 them against both the benchmark referee and the product engine. A later rule
 change becomes `laplace-8x8-v2`; old run results remain interpretable.
 
+(implemented 2026-07-23) `packages/engine/test/fixtures/rulegym-v1.json` plus
+`packages/engine/test/conformance.test.ts` cover elimination threshold,
+same-color-not-same-team capture, friendly fire, Void-piece behavior, team
+victory conditions, and move legality, and run in CI on every push/PR.
+`packages/engine/scripts/verify-against-product.cjs` is the on-demand,
+non-CI cross-check against a local product checkout (see the engine
+package's README); last run matched laplace-main commit `ff57443b` on all 10
+fixtures, and `packages/engine/scripts/check-upstream-drift.sh` confirmed
+`packages/engine/src/core` is still byte-identical to the product's
+`packages/game-shared/src/core`. The Python differential test remains open —
+out of scope for this slice, since it depends on the product's in-flight
+`ai/` CPU work
+(`docs/plans/2026-07-23-laplace-cpu-ai-strength-and-speed.md` in that repo)
+landing first. See also
+[`docs/product-cpu-adapter-v1-spec.md`](product-cpu-adapter-v1-spec.md) for
+the naming/interface spec prepared for that future import.
+
 ## 11. First implementation slices
 
 ### Slice A — executable rules and replay

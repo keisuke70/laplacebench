@@ -1,6 +1,7 @@
 node_modules/
 dist/
 packages/cli/runs/
+/runs/
 .env
 .env.*
 .DS_Store

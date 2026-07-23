@@ -1,0 +1,293 @@
+{
+  "fixtureSetVersion": "rulegym-v1",
+  "ruleset": "laplace-8x8-v1",
+  "description": "Stage-0 conformance fixtures: pin the frozen referee's behavior for the edge rules LaplaceBench depends on (design-v0.1.md section 10, benchmark-strategy-ja.md section 6.3). Each fixture is a minimal hand-built board, not a reachable full game, so illegal-in-isolation combinations (e.g. an eliminated player with a still-alive piece) are avoided deliberately rather than by accident.",
+  "fixtures": [
+    {
+      "id": "elimination-at-exact-threshold",
+      "ruleConcept": "elimination-threshold",
+      "description": "The third captured piece for a player must eliminate them at the fixed threshold 3, independent of board size (regression guard for the historical `boardSize - 5` bug). Their remaining piece becomes a Void piece (isDead: true), not removed from the board.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 2, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 3, "col": 2, "player": 1 },
+          { "row": 3, "col": 3, "player": 2 },
+          { "row": 3, "col": 7, "player": 1 },
+          { "row": 0, "col": 0, "player": 2 }
+        ]
+      },
+      "move": { "from": [3, 7], "to": [3, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [[3, 3]],
+        "capturedPieces": [0, 3, 0, 0],
+        "eliminatedPlayers": [false, true, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 2,
+        "pieceAt": [
+          { "row": 3, "col": 3, "expect": null },
+          { "row": 0, "col": 0, "expect": { "player": 2, "isDead": true } }
+        ]
+      }
+    },
+    {
+      "id": "capture-below-threshold-no-elimination",
+      "ruleConcept": "elimination-threshold",
+      "description": "Same geometry as elimination-at-exact-threshold, but the captured player only reaches 2 losses, so no elimination and no Void conversion happen.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 1, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 3, "col": 2, "player": 1 },
+          { "row": 3, "col": 3, "player": 2 },
+          { "row": 3, "col": 7, "player": 1 },
+          { "row": 0, "col": 0, "player": 2 }
+        ]
+      },
+      "move": { "from": [3, 7], "to": [3, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [[3, 3]],
+        "capturedPieces": [0, 2, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 2,
+        "pieceAt": [
+          { "row": 3, "col": 3, "expect": null },
+          { "row": 0, "col": 0, "expect": { "player": 2, "isDead": false } }
+        ]
+      }
+    },
+    {
+      "id": "friendly-fire-same-color-sandwich",
+      "ruleConcept": "friendly-fire",
+      "description": "Team A's Red sandwiches Team A's own Yellow between two Red pieces. Capture is keyed by exact color/player id, not by team, so the ally is captured.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 4, "col": 2, "player": 1 },
+          { "row": 4, "col": 3, "player": 3 },
+          { "row": 4, "col": 7, "player": 1 },
+          { "row": 7, "col": 7, "player": 2 }
+        ]
+      },
+      "move": { "from": [4, 7], "to": [4, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [[4, 3]],
+        "capturedPieces": [0, 0, 1, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 2,
+        "pieceAt": [{ "row": 4, "col": 3, "expect": null }]
+      }
+    },
+    {
+      "id": "no-mixed-color-sandwich",
+      "ruleConcept": "same-color-not-same-team-capture",
+      "description": "Core differentiator: a sandwich must be closed by the SAME exact color as the moving piece, not merely the same team. Red moving next to Blue-then-Yellow (Yellow being Red's own teammate, not another Red) must not capture either piece, because the far end is Yellow (player 3), not Red (player 1).",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 5, "col": 1, "player": 3 },
+          { "row": 5, "col": 2, "player": 2 },
+          { "row": 5, "col": 7, "player": 1 }
+        ]
+      },
+      "move": { "from": [5, 7], "to": [5, 3] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [],
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 2,
+        "pieceAt": [
+          { "row": 5, "col": 2, "expect": { "player": 2, "isDead": false } },
+          { "row": 5, "col": 1, "expect": { "player": 3, "isDead": false } }
+        ]
+      }
+    },
+    {
+      "id": "void-piece-moves-without-capturing",
+      "ruleConcept": "void-piece-behavior",
+      "description": "A Void piece (isDead: true, belonging to an already-eliminated player) may still move like a normal rook-move piece -- because eliminated players are not skipped in turn order once any of their pieces remain on the board -- but it must never trigger a capture, even into a geometrically valid pincer.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [3, 0, 0, 0],
+        "eliminatedPlayers": [true, false, false, false],
+        "pieces": [
+          { "row": 6, "col": 2, "player": 1, "isDead": true },
+          { "row": 6, "col": 3, "player": 2 },
+          { "row": 6, "col": 7, "player": 1, "isDead": true }
+        ]
+      },
+      "move": { "from": [6, 7], "to": [6, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [],
+        "capturedPieces": [3, 0, 0, 0],
+        "eliminatedPlayers": [true, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 2,
+        "pieceAt": [
+          { "row": 6, "col": 4, "expect": { "player": 1, "isDead": true } },
+          { "row": 6, "col": 7, "expect": null },
+          { "row": 6, "col": 3, "expect": { "player": 2, "isDead": false } }
+        ]
+      }
+    },
+    {
+      "id": "center-win-by-team-not-color",
+      "ruleConcept": "center-victory",
+      "description": "Center victory is evaluated by team, not by single color: three cells already held by Team A across two different colors (Red, Yellow), completed by a fourth Red piece. A game-ending move does not advance the turn.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 3, "col": 3, "player": 1 },
+          { "row": 3, "col": 4, "player": 3 },
+          { "row": 4, "col": 3, "player": 1 },
+          { "row": 7, "col": 4, "player": 1 }
+        ]
+      },
+      "move": { "from": [7, 4], "to": [4, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [],
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": true,
+        "winningTeam": "A",
+        "currentPlayer": 1,
+        "pieceAt": [{ "row": 4, "col": 4, "expect": { "player": 1, "isDead": false } }]
+      }
+    },
+    {
+      "id": "team-elimination-win-completes-with-second-member",
+      "ruleConcept": "team-elimination-victory",
+      "description": "Team B loses when BOTH of its colors (player 2 and player 4) are eliminated, not when either one is. Player 4 is already eliminated in the initial state; this move eliminates player 2 and must end the game for Team A. A game-ending move does not advance the turn.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 2, 0, 3],
+        "eliminatedPlayers": [false, false, false, true],
+        "pieces": [
+          { "row": 3, "col": 2, "player": 1 },
+          { "row": 3, "col": 3, "player": 2 },
+          { "row": 3, "col": 7, "player": 1 },
+          { "row": 0, "col": 0, "player": 4, "isDead": true }
+        ]
+      },
+      "move": { "from": [3, 7], "to": [3, 4] },
+      "expect": {
+        "valid": true,
+        "capturedPositions": [[3, 3]],
+        "capturedPieces": [0, 3, 0, 3],
+        "eliminatedPlayers": [false, true, false, true],
+        "gameEnded": true,
+        "winningTeam": "A",
+        "currentPlayer": 1,
+        "pieceAt": [{ "row": 0, "col": 0, "expect": { "player": 4, "isDead": true } }]
+      }
+    },
+    {
+      "id": "illegal-move-blocked-path",
+      "ruleConcept": "move-legality",
+      "description": "A rook-style move through an occupied intermediate square is illegal and must leave the state completely unchanged.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 2, "col": 2, "player": 1 },
+          { "row": 2, "col": 4, "player": 2 }
+        ]
+      },
+      "move": { "from": [2, 2], "to": [2, 6] },
+      "expect": {
+        "valid": false,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 1,
+        "pieceAt": [
+          { "row": 2, "col": 2, "expect": { "player": 1, "isDead": false } },
+          { "row": 2, "col": 4, "expect": { "player": 2, "isDead": false } },
+          { "row": 2, "col": 6, "expect": null }
+        ]
+      }
+    },
+    {
+      "id": "illegal-move-not-your-piece",
+      "ruleConcept": "move-legality",
+      "description": "A player may not move a piece that is not theirs, even an undefended one, even on an otherwise legal path.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [{ "row": 1, "col": 1, "player": 2 }]
+      },
+      "move": { "from": [1, 1], "to": [1, 3] },
+      "expect": {
+        "valid": false,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 1,
+        "pieceAt": [{ "row": 1, "col": 1, "expect": { "player": 2, "isDead": false } }]
+      }
+    },
+    {
+      "id": "illegal-move-destination-occupied",
+      "ruleConcept": "move-legality",
+      "description": "A move onto an occupied destination square is illegal, regardless of which color occupies it.",
+      "initialState": {
+        "boardSize": 8,
+        "currentPlayer": 1,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "pieces": [
+          { "row": 0, "col": 0, "player": 1 },
+          { "row": 0, "col": 1, "player": 2 }
+        ]
+      },
+      "move": { "from": [0, 0], "to": [0, 1] },
+      "expect": {
+        "valid": false,
+        "capturedPieces": [0, 0, 0, 0],
+        "eliminatedPlayers": [false, false, false, false],
+        "gameEnded": false,
+        "winningTeam": null,
+        "currentPlayer": 1,
+        "pieceAt": [
+          { "row": 0, "col": 0, "expect": { "player": 1, "isDead": false } },
+          { "row": 0, "col": 1, "expect": { "player": 2, "isDead": false } }
+        ]
+      }
+    }
+  ]
+}

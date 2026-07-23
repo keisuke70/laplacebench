@@ -10,7 +10,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc"
+    "build": "rm -rf dist && tsc",
+    "test": "tsx --test test/**/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "keywords": [
     "laplace",
@@ -26,6 +28,8 @@
     "directory": "packages/engine"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.9.0"
   }
 }

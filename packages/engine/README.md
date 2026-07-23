@@ -42,6 +42,41 @@ const res = game.makeMove(0, 3, 4, 3); // fromRow, fromCol, toRow, toCol
 Void conversion, elimination, turn order, and victory. `TakeshiPolicy` is a
 team-aware alpha-beta baseline (a policy, not a rules oracle).
 
+## Conformance
+
+`test/fixtures/rulegym-v1.json` pins the edge-rule behaviors this freeze
+depends on — exact elimination threshold, same-color-not-same-team capture,
+friendly fire, Void-piece move-without-capture, team (not color) center and
+elimination victory, and move legality — as hand-readable fixtures, run on
+every `npm test` (`test/conformance.test.ts`, `test/elimination-threshold.test.ts`).
+This is the Stage 0 gate from
+[`design-v0.1.md` section 10](../../docs/design-v0.1.md) and
+[`benchmark-strategy-ja.md` section 6.3](../../docs/benchmark-strategy-ja.md):
+a rules bug here invalidates every published result, so it is CI-enforced
+rather than a one-time manual read-through.
+
+These fixtures prove internal self-consistency of the frozen engine. They do
+**not** by themselves prove the freeze still matches the live product engine
+— the product repository is a separate, actively developed checkout this
+package must never depend on at runtime or in CI. For that, a maintainer can
+run the same fixtures against a local product checkout on demand:
+
+```bash
+node packages/engine/scripts/verify-against-product.cjs \
+  --product-path /path/to/laplace-main
+```
+
+(Requires `packages/game-shared/dist` already built in that checkout; this
+script never builds or writes into it.) Last verified 2026-07-23 against
+laplace-main commit `ff57443bbc7333efbad74084cfa6db2bfc634b1d`: all 10
+fixtures matched (also confirmed via a byte-for-byte `diff -rq` of
+`packages/engine/src/core` against the product's `packages/game-shared/src/core`
+— see `scripts/check-upstream-drift.sh`). If a future run diverges, that is
+a signal to cut a deliberate `laplace-8x8-v2`, not to silently edit this
+package's fixtures or source to match. The product repo is under active
+development on other work, so this commit hash will age quickly; re-run
+`scripts/verify-against-product.cjs` rather than trusting this note.
+
 ## Human-readable rules
 
 The English rulebook given to models is
