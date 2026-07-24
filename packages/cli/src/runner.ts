@@ -126,6 +126,22 @@ function syncLegacyUsageFields(stats: TeamStats): void {
 }
 
 export async function playGame(cfg: GameConfig): Promise<GameResult> {
+  try {
+    return await playGameInner(cfg);
+  } finally {
+    // Agents may own external resources (e.g. the product CPU bridge child
+    // process); release them on every exit path, not only after endGame.
+    for (const team of ["A", "B"] as const) {
+      try {
+        await cfg.agents[team].dispose?.();
+      } catch {
+        // disposal failures must not mask the game result or original error
+      }
+    }
+  }
+}
+
+async function playGameInner(cfg: GameConfig): Promise<GameResult> {
   const gameDir = path.join(cfg.runDir, "games", cfg.gameId);
   fs.mkdirSync(gameDir, { recursive: true });
   const eventsPath = path.join(gameDir, "events.jsonl");
@@ -357,6 +373,8 @@ export async function playGame(cfg: GameConfig): Promise<GameResult> {
         // The model's visible reply text — the "why" behind the move.
         // Powers the spectator commentary view; bounded to keep logs sane.
         raw: reply.raw?.slice(0, 4000),
+        // Agent-specific provenance (e.g. product CPU per-move seed).
+        meta: reply.meta,
       });
     }
 

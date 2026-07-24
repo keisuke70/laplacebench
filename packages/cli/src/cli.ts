@@ -27,7 +27,51 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
   return out;
 }
 
-function makeAgent(spec: string, seed: number, ctx: { runDir: string }): Agent {
+const PRODUCT_CPU_SPEC = /^product-cpu:([a-z0-9-]+):(level_\d+)$/;
+
+interface ProductCpuContext {
+  productRepo: string;
+  expectedCommit: string;
+}
+
+/** Resolve product repo + commit pin from CLI args and env. Fail-closed. */
+function productCpuContext(args: Record<string, string | boolean>): ProductCpuContext {
+  const productRepo = String(
+    args["product-repo"] ?? process.env.LAPLACE_PRODUCT_REPO ?? ""
+  );
+  const expectedCommit = String(
+    args["product-commit"] ?? process.env.LAPLACE_PRODUCT_COMMIT ?? ""
+  );
+  if (!productRepo) {
+    throw new Error(
+      "product-cpu specs need the product checkout: pass --product-repo or set LAPLACE_PRODUCT_REPO"
+    );
+  }
+  if (!expectedCommit) {
+    throw new Error(
+      "product-cpu specs need a commit pin: pass --product-commit or set LAPLACE_PRODUCT_COMMIT"
+    );
+  }
+  return { productRepo, expectedCommit };
+}
+
+async function makeAgent(
+  spec: string,
+  seed: number,
+  ctx: { runDir: string; productCpu?: ProductCpuContext }
+): Promise<Agent> {
+  const productCpu = spec.match(PRODUCT_CPU_SPEC);
+  if (productCpu) {
+    if (!ctx.productCpu) {
+      throw new Error(`product-cpu spec ${spec} used without --product-repo/--product-commit context`);
+    }
+    const { createProductCpuAgent } = require("./agents/productcpu") as typeof import("./agents/productcpu");
+    return createProductCpuAgent(productCpu[2], seed, {
+      productRepo: ctx.productCpu.productRepo,
+      expectedCommit: ctx.productCpu.expectedCommit,
+      expectedPolicy: productCpu[1],
+    });
+  }
   if (spec === "random") return randomAgent(seed);
   if (spec === "greedy") return greedyAgent(seed);
   if (spec === "center-greedy") return centerGreedyAgent(seed);
@@ -115,6 +159,45 @@ export async function arena(args: Record<string, string | boolean>): Promise<voi
   const runDir = path.resolve(process.cwd(), "runs", runId);
   fs.mkdirSync(runDir, { recursive: true });
 
+  // Metadata-only preflight: for product-cpu specs, spawn a bridge, verify
+  // hello (policy/commit/dirty/tier), capture provenance, dispose — all
+  // BEFORE run.json is written, so provenance and names are settled first.
+  const productSpecs = [specA, specB].filter((s) => PRODUCT_CPU_SPEC.test(s));
+  let productCpuCtx: ProductCpuContext | undefined;
+  let productProvenance: object | null = null;
+  if (productSpecs.length > 0) {
+    productCpuCtx = productCpuContext(args);
+    const { preflightProductCpu } = require("./agents/productcpu") as typeof import("./agents/productcpu");
+    let hello: import("./agents/productcpu").BridgeHello | null = null;
+    for (const spec of productSpecs) {
+      const m = spec.match(PRODUCT_CPU_SPEC)!;
+      hello = await preflightProductCpu(
+        {
+          productRepo: productCpuCtx.productRepo,
+          expectedCommit: productCpuCtx.expectedCommit,
+          expectedPolicy: m[1],
+        },
+        m[2]
+      );
+    }
+    productProvenance = {
+      policy_version: hello!.policy_version,
+      product_commit: hello!.product_commit,
+      python: hello!.python,
+      protocol: hello!.protocol,
+      product_repo: productCpuCtx.productRepo,
+      dirty: hello!.product_dirty,
+      teams: {
+        A: PRODUCT_CPU_SPEC.test(specA)
+          ? { spec: specA, level_id: specA.match(PRODUCT_CPU_SPEC)![2] }
+          : null,
+        B: PRODUCT_CPU_SPEC.test(specB)
+          ? { spec: specB, level_id: specB.match(PRODUCT_CPU_SPEC)![2] }
+          : null,
+      },
+    };
+  }
+
   fs.writeFileSync(
     path.join(runDir, "run.json"),
     JSON.stringify(
@@ -143,6 +226,7 @@ export async function arena(args: Record<string, string | boolean>): Promise<voi
               ? commandVersion("codex")
               : null,
         },
+        product_cpu: productProvenance,
         started_at: new Date().toISOString(),
       },
       null,
@@ -153,8 +237,15 @@ export async function arena(args: Record<string, string | boolean>): Promise<voi
   for (let g = 0; g < games; g++) {
     const swapped = swap && g % 2 === 1;
     const gameSeed = seed + g * 1000;
-    const first = makeAgent(swapped ? specB : specA, gameSeed + 1, { runDir });
-    const second = makeAgent(swapped ? specA : specB, gameSeed + 2, { runDir });
+    const ctx = { runDir, productCpu: productCpuCtx };
+    const first = await makeAgent(swapped ? specB : specA, gameSeed + 1, ctx);
+    let second: Agent;
+    try {
+      second = await makeAgent(swapped ? specA : specB, gameSeed + 2, ctx);
+    } catch (err) {
+      await first.dispose?.();
+      throw err;
+    }
     const gameId = `game-${String(g).padStart(3, "0")}`;
     const label = `${gameId}: A=${first.name} vs B=${second.name}`;
     process.stdout.write(label + " ... ");
@@ -217,6 +308,20 @@ async function main(): Promise<void> {
     }
     console.log(`${games - failed}/${games} games verified across ${runDirs.length} run(s)`);
     if (failed > 0 || games === 0) process.exitCode = 1;
+  } else if (cmd === "regret") {
+    const runDir = path.resolve(String(args["run"] ?? rest[0]));
+    const oracleSpec = String(args["oracle"] ?? "product-cpu:cpu-v4:level_5");
+    const m = oracleSpec.match(PRODUCT_CPU_SPEC);
+    if (!m) throw new Error(`--oracle must be a product-cpu spec, got: ${oracleSpec}`);
+    const ctx = productCpuContext(args);
+    const { analyzeRunRegret } = require("./regret") as typeof import("./regret");
+    const summary = await analyzeRunRegret(runDir, {
+      productRepo: ctx.productRepo,
+      expectedCommit: ctx.expectedCommit,
+      expectedPolicy: m[1],
+      oracleLevelId: m[2],
+    });
+    console.log(JSON.stringify(summary, null, 2));
   } else if (cmd === "standings") {
     const { standingsMarkdown } = require("./standings") as typeof import("./standings");
     const dirs = rest.filter((a) => !a.startsWith("--")).map((d) => path.resolve(d));
@@ -229,7 +334,7 @@ async function main(): Promise<void> {
     }
   } else {
     console.log(
-      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n  --max-plies N            default 100 (canonical cap for laplace-8x8-v1 matches)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
+      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench regret <runDir> [--oracle product-cpu:cpu-v4:level_5]  (offline per-move regret vs product oracle)\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n  --max-plies N            default 100 (canonical cap for laplace-8x8-v1 matches)\n\nproduct CPU (arena + regret):\n  --product-repo <path>    product checkout (or env LAPLACE_PRODUCT_REPO)\n  --product-commit <sha>   required commit pin (or env LAPLACE_PRODUCT_COMMIT)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | product-cpu:<policy>:<level_1..5> | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
     );
     process.exitCode = 1;
   }

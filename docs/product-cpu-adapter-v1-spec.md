@@ -1,6 +1,27 @@
-# Product CPU adapter — naming and interface spec (design only, not implemented)
+# Product CPU adapter — naming and interface spec
 
-Status: **spec only**. No agent code exists yet. This document exists so that
+> **Revision 2026-07-24 — implemented, transport changed to a local Python
+> bridge.** The naming convention below is unchanged and now live
+> (`product-cpu:cpu-v4:level_1` … `level_5`). The HTTP transport this spec
+> originally assumed (kept below as historical record) was replaced because:
+> (1) the per-move regret oracle requires `MinimaxAgent.
+> score_root_moves_for_analysis`, which the product HTTP API does not expose
+> (`/api/health` and `/api/move` only); (2) the product checkout's venv lacks
+> `uvicorn`, so the HTTP server cannot run without modifying the product
+> environment; (3) one contract now serves both the arena baseline and the
+> regret oracle. The bridge (`packages/cli/bridge/product_cpu_bridge.py`,
+> protocol `product-cpu-bridge-v1`, stdlib-only, bare python3) replicates
+> `app.py`'s resolution path (`get_cpu_level` → `MinimaxAgent(profile,
+> strict_profile=True)`, fresh agent per request) and fail-closes on
+> policy/commit/dirty/tier mismatches; provenance (policy_version, product
+> commit, python version) is recorded in `run.json` and all regret outputs.
+> Only the five cpu-v4 visible tiers are addressable; `level_6`…`level_13`
+> compat aliases are deliberately not exposed. See
+> `docs/plans/2026-07-24-product-cpu-import-and-regret.md`.
+
+Status: implemented (bridge transport). The remainder of this document is the
+original 2026-07-23 design; sections that conflict with the revision note
+above are historical. This document exists so that
 when the product repository's CPU strengthening slice finishes
 (`docs/plans/2026-07-23-laplace-cpu-ai-strength-and-speed.md` in
 `laplace-main`), wiring its result into LaplaceBench as a new baseline is a

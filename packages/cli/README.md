@@ -29,8 +29,34 @@ npx tsx src/cli.ts summarize runs/<run-id>
 ```
 
 Agent specs: `random` | `greedy` | `chaos` (failure-policy exerciser) |
-`takeshi` (product minimax) | `takeshi:dN` (fixed depth) |
+`takeshi` (frozen 2024 policy) | `takeshi:dN` (fixed depth) |
+`product-cpu:<policy>:<level_1..5>` (current product CPU via local bridge) |
 `anthropic:<model-id>` (shorthands: `opus`, `sonnet`, `haiku`, `fable`).
+
+## Product CPU baselines + per-move regret
+
+`product-cpu:cpu-v4:level_N` runs the product's current CPU (five visible
+tiers) through a stdlib-only Python bridge — no venv, no HTTP server. Both
+arena and regret need the product checkout and a commit pin (fail-closed:
+policy/commit/dirty-tree/tier mismatches all refuse to run):
+
+```bash
+export LAPLACE_PRODUCT_REPO=/path/to/laplace-main-cpu-v4   # pinned snapshot
+export LAPLACE_PRODUCT_COMMIT=$(git -C "$LAPLACE_PRODUCT_REPO" rev-parse HEAD)
+
+npx tsx src/cli.ts arena --team-a product-cpu:cpu-v4:level_5 --team-b takeshi:d2 \
+  --games 2 --swap --seed 42
+
+# offline per-move regret for any finished run (oracle: strongest tier)
+npx tsx src/cli.ts regret runs/<run-id> --oracle product-cpu:cpu-v4:level_5
+```
+
+Regret follows the oracle's lexicographic preference: the scalar
+`regret_value` is only computed when the chosen move shares the best move's
+`selectionClass` (nonnegative by construction); class mismatches are counted
+separately as categorical blunders (`missed_immediate_win`, `chose_unsafe`).
+Every output embeds the oracle identity (spec + product commit + per-position
+depth); values are comparable only within the same oracle generation.
 
 ## Spectating (product web app)
 

@@ -107,6 +107,9 @@ export interface AgentReply {
   usage?: ModelUsage;
   /** The reply missed the turn deadline and must never be applied. */
   timedOut?: boolean;
+  /** Agent-specific provenance recorded verbatim on the move event
+   * (e.g. the product CPU's effective per-move seed). */
+  meta?: Record<string, unknown>;
 }
 
 export interface EndGameInfo {
@@ -126,6 +129,9 @@ export interface Agent {
   startGame?(team: TeamId, gameId: string): Promise<void> | void;
   act(input: TurnInput): Promise<AgentReply> | AgentReply;
   endGame?(info?: EndGameInfo): Promise<void> | void;
+  /** Release external resources (child processes, sockets). Must be safe to
+   * call more than once; the runner calls it on every exit path. */
+  dispose?(): Promise<void> | void;
 }
 
 /** mulberry32 seeded PRNG */
