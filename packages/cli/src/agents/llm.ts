@@ -4,12 +4,7 @@ import { buildInstructions, extractMove, observationFromInput, turnMessage } fro
 import type { Agent, AgentReply, TeamId, TurnInput } from "../types";
 import { normalizeAnthropicUsage } from "../usage";
 
-const MODEL_SHORTHAND: Record<string, string> = {
-  opus: "claude-opus-4-8",
-  sonnet: "claude-sonnet-5",
-  haiku: "claude-haiku-4-5",
-  fable: "claude-fable-5",
-};
+import { MODEL_SHORTHAND } from "../catalog";
 
 /**
  * Persistent-context Anthropic adapter. One append-only conversation per

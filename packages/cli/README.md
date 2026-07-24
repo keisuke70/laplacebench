@@ -16,7 +16,10 @@ npm install
 ## Run
 
 ```bash
-# baselines (no API key needed)
+# interactive wizard — pick providers/models/effort, auth checked last
+npx tsx src/cli.ts play
+
+# scripted / CI: flags (baselines need no API key)
 npx tsx src/cli.ts arena --team-a takeshi --team-b greedy --games 2 --swap
 
 # LLM vs baseline (needs ANTHROPIC_API_KEY)
@@ -28,10 +31,11 @@ npx tsx src/cli.ts arena --team-a anthropic:opus --team-b takeshi \
 npx tsx src/cli.ts summarize runs/<run-id>
 ```
 
-Agent specs: `random` | `greedy` | `chaos` (failure-policy exerciser) |
-`takeshi` (frozen 2024 policy) | `takeshi:dN` (fixed depth) |
-`product-cpu:<policy>:<level_1..5>` (current product CPU via local bridge) |
-`anthropic:<model-id>` (shorthands: `opus`, `sonnet`, `haiku`, `fable`).
+Agent specs: the published choices are what `laplacebench play` offers in
+its menus and what the CLI help prints (both generated from
+`src/catalog.ts`, the single canonical catalog). Free-form spec strings
+remain accepted beyond the published set — e.g. `takeshi:dN`,
+`center-greedy`, `chaos`, or any full model id.
 
 ## Product CPU baselines + per-move regret
 
@@ -89,7 +93,9 @@ Match resource controls:
 - `--output-token-budget N`: per team/game, in-game reasoning-inclusive output
   only; an admitted turn may overshoot and still play its move;
 - `--turn-timeout-ms N`: one deadline shared by both attempts in a turn
-  (default `300000`); expiry advances the product turn as a timeout pass.
+  (default `1200000` for LLM matches — a hang backstop, not the fairness
+  instrument — and `300000` otherwise); expiry advances the product turn
+  as a timeout pass.
 
 Post-game learning is participant-owned harness activity and is excluded from
 the match wallet and match usage summary.
