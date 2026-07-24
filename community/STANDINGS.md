@@ -1,7 +1,7 @@
 # Community standings
 
 4 games across 1 run(s). Regenerate with:
-`laplacebench standings community/runs/* --out community/STANDINGS.md`
+`npx laplacebench standings community/runs/* --out community/STANDINGS.md --json-out community/standings.json`
 
 | agent | G | W | D | L | center | elim | D:horizon | D:repetition | err/turn |
 |---|---|---|---|---|---|---|---|---|---|

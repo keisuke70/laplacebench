@@ -1,0 +1,32 @@
+{
+  "schema": "laplace-bench-standings-v1",
+  "lane": "community",
+  "game_count": 4,
+  "run_count": 1,
+  "rows": [
+    {
+      "agent": "center-greedy",
+      "games": 4,
+      "wins": 2,
+      "draws": 0,
+      "losses": 2,
+      "center_wins": 2,
+      "elim_wins": 0,
+      "horizon_draws": 0,
+      "repetition_draws": 0,
+      "err_per_turn": 0
+    },
+    {
+      "agent": "takeshi",
+      "games": 4,
+      "wins": 2,
+      "draws": 0,
+      "losses": 2,
+      "center_wins": 0,
+      "elim_wins": 2,
+      "horizon_draws": 0,
+      "repetition_draws": 0,
+      "err_per_turn": 0
+    }
+  ]
+}

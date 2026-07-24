@@ -1,9 +1,9 @@
 name: Verify community runs
 
+# No path filter — the standings consistency gate must also catch PRs that
+# change the generator/CLI and forget to regenerate the committed artifacts.
 on:
   pull_request:
-    paths:
-      - "community/**"
 
 jobs:
   verify:
@@ -26,5 +26,24 @@ jobs:
             echo "no community runs found"; exit 1
           fi
           node packages/cli/dist/cli.js verify "${dirs[@]}"
-      - name: Standings preview
-        run: node packages/cli/dist/cli.js standings community/runs/*/
+      - name: Standings consistency gate
+        run: |
+          shopt -s nullglob
+          tmp=$(mktemp -d)
+          node packages/cli/dist/cli.js standings community/runs/*/ \
+            --out "$tmp/STANDINGS.md" --json-out "$tmp/standings.json"
+          fail=0
+          for f in STANDINGS.md standings.json; do
+            if [ ! -f "community/$f" ]; then
+              echo "::error::community/$f is missing"; fail=1; continue
+            fi
+            if ! diff -u "community/$f" "$tmp/$f"; then
+              echo "::error::community/$f is out of date"; fail=1
+            fi
+          done
+          if [ $fail -ne 0 ]; then
+            echo ""
+            echo "Regenerate the committed standings with:"
+            echo "  npx laplacebench standings community/runs/* --out community/STANDINGS.md --json-out community/standings.json"
+            exit 1
+          fi

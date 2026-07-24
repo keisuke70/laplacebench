@@ -1,6 +1,36 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+/**
+ * Canonical regeneration command — used verbatim in the README, the wizard's
+ * submission guidance, the generated Markdown, and the CI gate's failure
+ * message, so contributors always see exactly one command.
+ */
+export const STANDINGS_REGEN_COMMAND =
+  "npx laplacebench standings community/runs/* --out community/STANDINGS.md --json-out community/standings.json";
+
+export interface StandingsRow {
+  agent: string;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  center_wins: number;
+  elim_wins: number;
+  horizon_draws: number;
+  repetition_draws: number;
+  /** errors per turn rounded to 3 decimals; null when the agent had no turns */
+  err_per_turn: number | null;
+}
+
+export interface StandingsData {
+  schema: "laplace-bench-standings-v1";
+  lane: "community";
+  game_count: number;
+  run_count: number;
+  rows: StandingsRow[];
+}
+
 interface Agg {
   agent: string;
   games: number;
@@ -16,10 +46,12 @@ interface Agg {
 }
 
 /**
- * Aggregate standings across many run directories into a markdown table.
- * Used for the community lane (community/STANDINGS.md).
+ * Single computation behind both the Markdown table and the public JSON.
+ * Deterministic byte contract (docs/plans/2026-07-25-standings-json.md):
+ * total order = wins desc, win-rate desc, then ordinal code-unit agent-name
+ * asc (no locale collation); err_per_turn = Math.round(x*1000)/1000.
  */
-export function standingsMarkdown(runDirs: string[]): string {
+export function standingsData(runDirs: string[]): StandingsData {
   const rows = new Map<string, Agg>();
   const row = (agent: string): Agg => {
     let r = rows.get(agent);
@@ -60,21 +92,59 @@ export function standingsMarkdown(runDirs: string[]): string {
     }
   }
 
-  const sorted = [...rows.values()].sort(
-    (a, b) => b.wins - a.wins || b.wins / Math.max(1, b.games) - a.wins / Math.max(1, a.games)
-  );
+  const sorted = [...rows.values()].sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    const ra = a.wins / Math.max(1, a.games);
+    const rb = b.wins / Math.max(1, b.games);
+    if (rb !== ra) return rb - ra;
+    // ordinal code-unit comparison — environment-independent
+    return a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : 0;
+  });
 
+  return {
+    schema: "laplace-bench-standings-v1",
+    lane: "community",
+    game_count: gameCount,
+    run_count: runCount,
+    rows: sorted.map((r) => ({
+      agent: r.agent,
+      games: r.games,
+      wins: r.wins,
+      draws: r.draws,
+      losses: r.losses,
+      center_wins: r.centerWins,
+      elim_wins: r.elimWins,
+      horizon_draws: r.horizonDraws,
+      repetition_draws: r.repetitionDraws,
+      err_per_turn:
+        r.turns > 0 ? Math.round((r.errors / r.turns) * 1000) / 1000 : null,
+    })),
+  };
+}
+
+/** Public JSON artifact: 2-space indent, exactly one trailing newline. */
+export function standingsJson(runDirs: string[]): string {
+  return JSON.stringify(standingsData(runDirs), null, 2) + "\n";
+}
+
+/**
+ * Aggregate standings across many run directories into a markdown table.
+ * Used for the community lane (community/STANDINGS.md). Derived from
+ * standingsData — never a second computation.
+ */
+export function standingsMarkdown(runDirs: string[]): string {
+  const data = standingsData(runDirs);
   const lines = [
     `# Community standings`,
     ``,
-    `${gameCount} games across ${runCount} run(s). Regenerate with:`,
-    "`laplacebench standings community/runs/* --out community/STANDINGS.md`",
+    `${data.game_count} games across ${data.run_count} run(s). Regenerate with:`,
+    "`" + STANDINGS_REGEN_COMMAND + "`",
     ``,
     `| agent | G | W | D | L | center | elim | D:horizon | D:repetition | err/turn |`,
     `|---|---|---|---|---|---|---|---|---|---|`,
-    ...sorted.map(
+    ...data.rows.map(
       (r) =>
-        `| \`${r.agent}\` | ${r.games} | ${r.wins} | ${r.draws} | ${r.losses} | ${r.centerWins} | ${r.elimWins} | ${r.horizonDraws} | ${r.repetitionDraws} | ${r.turns > 0 ? (r.errors / r.turns).toFixed(3) : "-"} |`
+        `| \`${r.agent}\` | ${r.games} | ${r.wins} | ${r.draws} | ${r.losses} | ${r.center_wins} | ${r.elim_wins} | ${r.horizon_draws} | ${r.repetition_draws} | ${r.err_per_turn === null ? "-" : r.err_per_turn.toFixed(3)} |`
     ),
     ``,
     `Conditions (model, effort, harness) are labeled in agent names; small samples.`,

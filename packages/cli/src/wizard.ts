@@ -1,5 +1,6 @@
 import * as readline from "node:readline";
 import { PROVIDERS, type ProviderEntry } from "./catalog";
+import { STANDINGS_REGEN_COMMAND } from "./standings";
 
 /** Injectable I/O so the whole flow is testable with scripted answers. */
 export interface WizardIO {
@@ -198,9 +199,10 @@ export function submissionGuidance(runId: string): string[] {
     "── community 提出(任意) ──",
     "このランを公開台帳に載せるには:",
     `  cp -R runs/${runId} community/runs/<github名>--${runId}`,
+    `  ${STANDINGS_REGEN_COMMAND}`,
     "その後 laplacebench リポジトリへ pull request を送ってください。",
-    "CI が全対局を凍結エンジンでリプレイ検証し、通ればマージ後に",
-    "community standings に反映されます (community/README.md 参照)。",
+    "CI が全対局を凍結エンジンでリプレイ検証し、standings の整合も",
+    "検査します。マージで公開台帳に反映されます (community/README.md 参照)。",
   ];
 }
 

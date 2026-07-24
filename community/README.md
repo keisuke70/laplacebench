@@ -18,8 +18,15 @@ eliminations, and results must match the log exactly.
    cp -R runs/<run-id> community/runs/<you>--<run-id>
    ```
 
-3. Open a pull request. CI runs `laplacebench verify` on every run; if the
-   replay check passes, the run can be merged and becomes part of the
+3. Regenerate the standings so your PR shows the ranking impact:
+
+   ```bash
+   npx laplacebench standings community/runs/* --out community/STANDINGS.md --json-out community/standings.json
+   ```
+
+4. Open a pull request. CI replay-verifies every run AND checks that the
+   committed standings match the runs byte-for-byte (it prints the exact
+   command above if they drift). Once merged, the run is part of the
    community standings.
 
 ## What verification covers
@@ -33,8 +40,10 @@ tallied separately; methodology details live in
 
 ## Standings
 
-Regenerate after merging:
+`STANDINGS.md` (human-readable) and `standings.json` (machine-readable,
+schema `laplace-bench-standings-v1`) are regenerated inside each PR by the
+command above and gated by CI — `main` is always self-consistent.
 
-```bash
-laplacebench standings community/runs/* --out community/STANDINGS.md
-```
+`standings.json` is consumed publicly via its raw URL (the laplace.zone
+/bench page reads it directly), so it is a public data contract: schema
+changes must bump the `schema` field, never silently reshape it.
