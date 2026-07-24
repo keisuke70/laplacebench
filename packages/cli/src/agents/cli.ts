@@ -29,6 +29,39 @@ interface Spawned {
   timedOut: boolean;
 }
 
+/**
+ * Child environment for CLI agents. The bench's contract is that run
+ * conditions are labeled in agent names; ambient session variables must not
+ * silently change them. CLAUDE_EFFORT leaked from a launching Claude Code
+ * session and ran the whole 2026-07-24 pilot at effort=high without any
+ * label — the explicit `--effort` flag is the only sanctioned channel.
+ */
+export function buildChildEnv(
+  base: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const env = { ...base };
+  delete env.CLAUDE_EFFORT;
+  return env;
+}
+
+/**
+ * Diagnostic line for a failed CLI reply. Each field is bounded
+ * individually — the provider cause (`error`, then `result`) must survive
+ * the event-log truncation no matter how large the other fields are. At a
+ * single 400-char bound the usage block swallowed the actual error message
+ * during the 2026-07-24 rate-limit incident.
+ */
+export function formatCliResultError(parsed: Record<string, unknown>): string {
+  const bounded = (v: unknown, n: number) =>
+    v === undefined ? undefined : JSON.stringify(v)?.slice(0, n);
+  const head = {
+    is_error: parsed.is_error,
+    error: bounded(parsed.error, 300),
+    result: bounded(parsed.result, 300),
+  };
+  return `CLI_RESULT_ERROR: ${JSON.stringify(head)} | full: ${JSON.stringify(parsed).slice(0, 600)}`;
+}
+
 function run(
   cmd: string,
   args: string[],
@@ -40,7 +73,12 @@ function run(
     const child = execFile(
       cmd,
       args,
-      { cwd, timeout: Math.max(1, timeoutMs), maxBuffer: 64 * 1024 * 1024 },
+      {
+        cwd,
+        timeout: Math.max(1, timeoutMs),
+        maxBuffer: 64 * 1024 * 1024,
+        env: buildChildEnv(),
+      },
       (err, stdout, stderr) => {
         resolve({
           stdout: stdout ?? "",
@@ -160,7 +198,7 @@ export function claudeCliAgent(opts: {
       if (parsed.is_error || typeof parsed.result !== "string") {
         return {
           move: null,
-          raw: `CLI_RESULT_ERROR: ${JSON.stringify(parsed).slice(0, 400)}`,
+          raw: formatCliResultError(parsed),
           latencyMs,
         };
       }

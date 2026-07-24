@@ -147,3 +147,20 @@ d2-vs-d3再測(cap 100)クローズ追記 + 段階0.5スモークラン記録
   1シードからcap仮説を一般棄却(v1追記)の2件の過大表現 → 受理、
   支持される範囲に限定する文言へ修正(revise, class: C)。
 - ラウンド 2・指摘計 2 件で APPROVED(confidence 0.99)
+
+## Follow-on light slice: pilot-v1-record(tier: light)
+
+段階0.5縮小グリッド(3モデル×product 3tier×2局)の記録
+(docs/pilot-stage05-v1.md)+ ラン中に発覚した2件のbounded corrective
+(CLI子プロセスの環境サニタイズ=CLAUDE_EFFORT継承漏れの遮断、
+CLIエラー診断のフィールド別バウンド化)。
+- Q(review/env-leak-adjacent-path): buildChildEnvが通常対局のみで
+  learning agentの事後解析spawnに未適用と指摘 → 受理、両経路に適用
+  (revise, class: B)。
+- Q(review/formatter-untested): 2件目correctiveの回帰テスト欠如+
+  長大resultがerrorを押し出す欠陥 → 受理、フォーマッタ抽出+
+  フィールド別バウンド+incident形状のテスト2本(revise, class: B)。
+- Q(review/gate-overclaim): n=2/ペアリングで「§7ゲート通過」と主張 →
+  受理、「縮小グリッドの予備シグナル、ゲート判定には規定の10-20局と
+  不確実性報告が必要」に修正(revise, class: C)。
+- ラウンド 2・指摘計 3 件で APPROVED(confidence 0.99)

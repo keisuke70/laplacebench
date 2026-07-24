@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { colorName, playerTeam } from "../engine";
+import { buildChildEnv } from "./cli";
 import type { Agent, EndGameInfo, TeamId } from "../types";
 import { claudeCliAgent } from "./cli";
 
@@ -48,7 +49,9 @@ function runClaude(args: string[], timeoutMs = 600_000): Promise<string> {
     execFile(
       "claude",
       args,
-      { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 },
+      // buildChildEnv: the postgame analysis is part of the labeled benchmark
+      // condition too — ambient CLAUDE_EFFORT must not change it either.
+      { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, env: buildChildEnv() },
       (err, stdout, stderr) => {
         if (err && !stdout) return reject(new Error(`${err.message} ${stderr.slice(0, 200)}`));
         resolve(stdout ?? "");

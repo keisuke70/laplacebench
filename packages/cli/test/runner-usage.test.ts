@@ -154,3 +154,33 @@ test("late reply is discarded and the product turn advances as a timeout pass", 
     fs.rmSync(runDir, { recursive: true, force: true });
   }
 });
+
+test("CLI agent child env drops ambient CLAUDE_EFFORT (conditions must be labeled, not inherited)", async () => {
+  const { buildChildEnv } = await import("../src/agents/cli");
+  const env = buildChildEnv({ PATH: "/bin", CLAUDE_EFFORT: "high", OTHER: "keep" });
+  assert.equal(env.CLAUDE_EFFORT, undefined);
+  assert.equal(env.OTHER, "keep");
+  assert.equal(env.PATH, "/bin");
+});
+
+test("CLI error diagnostics keep the provider cause under truncation", async () => {
+  const { formatCliResultError } = await import("../src/agents/cli");
+  // Usage-heavy payload (the 2026-07-24 incident shape): error must survive.
+  const usageHeavy = {
+    is_error: true,
+    error: { type: "rate_limit_error", message: "usage limit reached" },
+    usage: { buckets: "x".repeat(2000) },
+  };
+  const line1 = formatCliResultError(usageHeavy);
+  assert.match(line1, /rate_limit_error/);
+  assert.match(line1, /usage limit reached/);
+  // Oversized result must not push the error field out of the bound.
+  const bigResult = {
+    is_error: true,
+    error: { message: "the real cause" },
+    result: "y".repeat(5000),
+  };
+  const line2 = formatCliResultError(bigResult);
+  assert.match(line2, /the real cause/);
+  assert.ok(line2.length < 2000);
+});
