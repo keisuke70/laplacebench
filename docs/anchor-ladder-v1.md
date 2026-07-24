@@ -112,3 +112,25 @@ in a way that should be behavior-preserving.
 - Not wired into the CLI as a preset yet; the commands above are the
   citable definition until/unless a `laplacebench ladder` subcommand is
   worth adding.
+
+## Follow-up 2026-07-24: d2-vs-d3 re-measured at the canonical cap — open item closed
+
+Re-run of the inconclusive pairing under the now-frozen match conduct
+(`docs/match-conduct-laplace-8x8-v1.md`, max_plies=100, repetition rule),
+same seed 1005:
+
+| pairing | games | result |
+|---|---|---|
+| `takeshi:d2` vs `takeshi:d3` | 2 (1 paired seed) | d2 1W-1D — **identical shape to the original** (d2 won by elimination at ply 59; the other game drew at the horizon, now 100 instead of 60) |
+
+The "60-ply cap cut the deeper search's edge short" explanation is not
+supported for this paired seed: at the canonical cap the outcome shape was
+unchanged. (One seed cannot reject cap effects in general; what remains is
+either real variance at n=2 or `TakeshiPolicy`'s static evaluation
+dominating shallow depth gains.)
+This item is now **closed without further sampling**, deliberately:
+[`anchor-ladder-v2.md`](anchor-ladder-v2.md) shows the entire product
+cpu-v4 ladder — including its weakest tier — beats `takeshi:d2` by early
+center rush, so the takeshi ladder serves as a floor anchor only, and
+resolving d2-vs-d3 to statistical significance would purchase no
+discriminating power the benchmark actually uses.

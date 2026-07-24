@@ -138,3 +138,12 @@ Tier defense: 新しいagent transport契約・新metricの導入(標準)。
   テスト、stderr を契約通り即 fail-closed(全 pending reject)に統一+
   fake-bridge stderr モードのテスト。
 - ラウンド 2・指摘計 4 件で APPROVED(confidence 0.99)
+
+## Follow-on light slice: stage05-smoke-docs(tier: light)
+
+d2-vs-d3再測(cap 100)クローズ追記 + 段階0.5スモークラン記録
+(docs/pilot-stage05-smoke.md)。doc-only、コード無変更、回帰ゲートgreen。
+- Q(review/overclaim-guard): n=2から§7失敗モード不発生を主張(pilot doc)、
+  1シードからcap仮説を一般棄却(v1追記)の2件の過大表現 → 受理、
+  支持される範囲に限定する文言へ修正(revise, class: C)。
+- ラウンド 2・指摘計 2 件で APPROVED(confidence 0.99)
