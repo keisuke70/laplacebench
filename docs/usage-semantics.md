@@ -110,10 +110,18 @@ condition.
 
 ## Match resource policy
 
-The optional `--output-token-budget N` is a separate wallet for each team in
-each game. It uses in-game `output_tokens_total`, which includes reasoning for
+`--output-token-budget N` is a separate wallet for each team in each game.
+Since 2026-07-24 (prompt generation `p2-token-budget`) it is the canonical
+fairness envelope for matches involving LLM agents: **default 250,000 output
+tokens per team per game** (provisional-canonical, reviewed before the v1
+freeze — see `docs/match-conduct-laplace-8x8-v1.md`), disclosed to the model
+in the system instructions and in every observation
+(`output_token_budget` / `output_tokens_used`). Baseline-only matches have no
+budget. It uses in-game `output_tokens_total`, which includes reasoning for
 both providers and avoids using vendor-injected input context as the common
-budget currency.
+budget currency. The envelope is *nominally* equal across providers; the
+cross-provider tokenizer caveat above still applies to any cross-provider
+reading of it.
 
 Admission is checked once at the start of a scheduled turn:
 
@@ -125,8 +133,11 @@ Admission is checked once at the start of a scheduled turn:
 There is intentionally no mid-generation cutoff and no attempt to claw back
 the final admitted move. Post-game learning is outside this wallet.
 
-Each turn has one wall-clock deadline shared by both attempts. The default is
-300,000 ms (five minutes). A reply completing after the deadline is discarded,
+Each turn has one wall-clock deadline shared by both attempts. Since
+2026-07-24 the wall clock is a hang backstop, not the fairness instrument:
+the default is 1,200,000 ms (twenty minutes) for matches involving LLM
+agents and 300,000 ms otherwise. Latency remains recorded per call.
+A reply completing after the deadline is discarded,
 and the referee calls the same `advanceTurn()` path used for a product timeout.
 The pass is logged separately as `timeout`; token-budget admission failures are
 logged as `token_budget`.

@@ -3,8 +3,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { observation } from "../engine";
-import { buildInstructions, extractMove, turnMessage } from "../prompt";
+import { buildInstructions, extractMove, observationFromInput, turnMessage } from "../prompt";
 import type { Agent, AgentReply, TeamId, TurnInput } from "../types";
 import { normalizeAnthropicUsage, normalizeOpenAIUsage } from "../usage";
 
@@ -143,11 +142,11 @@ export function claudeCliAgent(opts: {
     },
     async act(input: TurnInput): Promise<AgentReply> {
       const obsJson = JSON.stringify(
-        observation(input.state, input.ply, input.maxPlies, team, input.recent)
+        observationFromInput(input)
       );
       let userText = turnMessage(obsJson, input.attempt, input.error?.code, input.ply);
       if (!started) {
-        const parts = [buildInstructions(team)];
+        const parts = [buildInstructions(team, { outputTokenBudget: input.outputTokenBudget })];
         if (prelude) parts.push(prelude);
         parts.push(userText);
         userText = parts.join("\n\n---\n\n");
@@ -256,11 +255,11 @@ export function codexCliAgent(opts: { model?: string; effort?: string }): Agent 
     },
     async act(input: TurnInput): Promise<AgentReply> {
       const obsJson = JSON.stringify(
-        observation(input.state, input.ply, input.maxPlies, team, input.recent)
+        observationFromInput(input)
       );
       let userText = turnMessage(obsJson, input.attempt, input.error?.code, input.ply);
       if (!started) {
-        userText = `${buildInstructions(team)}\n\n---\n\n${userText}`;
+        userText = `${buildInstructions(team, { outputTokenBudget: input.outputTokenBudget })}\n\n---\n\n${userText}`;
       }
 
       const base = ["exec", "--json", "--skip-git-repo-check", ...effortArgs];

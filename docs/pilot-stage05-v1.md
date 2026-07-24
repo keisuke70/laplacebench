@@ -92,3 +92,31 @@ internally, so pairing-level parallelism is the ceiling). Regret analysis:
   this document is the durable record. Reproduce lines are in the driver
   scripts (`runs/pilot-v1-driver.sh`, `runs/pilot-v1-parallel.sh`, also
   gitignored — the arena/regret commands and seeds are restated above).
+
+## Addendum 2026-07-25 — token-envelope validation rerun (prompt generation p2)
+
+Mechanical validation of the token-denominated envelope
+(`docs/plans/2026-07-24-token-budget.md` §5): opus vs level_3 rerun under
+the new defaults (budget 250k, backstop timeout 1200 s, sanitized effort,
+`prompt_rev: p2-token-budget`). One game per orientation (the original
+paired run was killed mid-game-001 by a host sleep; the partial game is
+quarantined, and the second orientation was rerun as a separate seed).
+Results are NOT comparable with the p1 grid above (different prompt
+generation); only the mechanical facts are claimed:
+
+| game (orientation) | result | opus admitted turns | budget-pass turns | exhaustion ply | TO | opus tokens_out | avg lat |
+|---|---|---|---|---|---|---|---|
+| seed 7001, opus=A | level_3 win (elim @56) | 28 | 0 | — | **0** | 249,519 / 250,000 (99.8%) | 117.2 s |
+| seed 7002, opus=B | level_3 win (elim @31) | 15 | 0 | — | **0** | 219,124 / 250,000 (87.6%) | 189.1 s |
+
+1. **Timeout forfeits are gone**: 0 in both games (the p1 pairing had 9).
+   Opus now loses on the board, not on the clock.
+2. **The budget did not fire** (0 auto-passed turns in either game) — per
+   the pre-registered rule this **reconfirms 250k**, recorded in
+   `docs/match-conduct-laplace-8x8-v1.md`. Honest margin note: consumption
+   reached 99.8% / 87.6%, so 250k is the *effective binding scale* for an
+   opus-class heavy thinker (~14.5k tokens/turn) — the value is neither
+   loose nor yet observed to truncate games.
+3. Disclosure/recording verified: `prompt_rev`, budget, and backstop
+   timeout present in `game_start`/`run.json`; the observation carries
+   `output_token_budget` / `output_tokens_used` (test-pinned).

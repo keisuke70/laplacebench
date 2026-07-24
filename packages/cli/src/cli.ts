@@ -8,7 +8,13 @@ import { greedyAgent } from "./agents/greedy";
 import { randomAgent } from "./agents/random";
 import { takeshiAgent } from "./agents/takeshi";
 import { summarize } from "./metrics";
-import { playGame, resolveMaxPlies } from "./runner";
+import {
+  CANONICAL_OUTPUT_TOKEN_BUDGET,
+  LLM_TURN_TIMEOUT_MS,
+  playGame,
+  resolveMaxPlies,
+} from "./runner";
+import { PROMPT_REV } from "./prompt";
 import type { Agent } from "./types";
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -28,6 +34,42 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
 }
 
 const PRODUCT_CPU_SPEC = /^product-cpu:([a-z0-9-]+):(level_\d+)$/;
+
+/** Specs whose agents consume model tokens (the fairness envelope applies). */
+export function isLlmSpec(spec: string): boolean {
+  return (
+    spec.startsWith("claude-cli") || // includes claude-cli-learn
+    spec.startsWith("codex-cli") ||
+    spec.startsWith("anthropic:")
+  );
+}
+
+/**
+ * Match resource defaults (docs/match-conduct doc): matches with LLM agents
+ * get the canonical token envelope and the backstop timeout; baseline-only
+ * matches keep the old defaults (no tokens to meter). Explicit flags win.
+ */
+export function resolveMatchResources(
+  args: Record<string, string | boolean>,
+  specA: string,
+  specB: string
+): { turnTimeoutMs: number; outputTokenBudget: number | undefined } {
+  const llmMatch = isLlmSpec(specA) || isLlmSpec(specB);
+  const turnTimeoutMs = parseInt(
+    String(
+      args["turn-timeout-ms"] ??
+        (llmMatch ? String(LLM_TURN_TIMEOUT_MS) : "300000")
+    ),
+    10
+  );
+  const outputTokenBudget =
+    args["output-token-budget"] !== undefined
+      ? parseInt(String(args["output-token-budget"]), 10)
+      : llmMatch
+        ? CANONICAL_OUTPUT_TOKEN_BUDGET
+        : undefined;
+  return { turnTimeoutMs, outputTokenBudget };
+}
 
 interface ProductCpuContext {
   productRepo: string;
@@ -134,14 +176,11 @@ export async function arena(args: Record<string, string | boolean>): Promise<voi
   const swap = Boolean(args["swap"]);
   const seed = parseInt(String(args["seed"] ?? "42"), 10);
   const maxPlies = resolveMaxPlies(args["max-plies"]);
-  const turnTimeoutMs = parseInt(
-    String(args["turn-timeout-ms"] ?? "300000"),
-    10
+  const { turnTimeoutMs, outputTokenBudget } = resolveMatchResources(
+    args,
+    specA,
+    specB
   );
-  const outputTokenBudget =
-    args["output-token-budget"] === undefined
-      ? undefined
-      : parseInt(String(args["output-token-budget"]), 10);
   if (!Number.isSafeInteger(turnTimeoutMs) || turnTimeoutMs <= 0) {
     throw new Error("--turn-timeout-ms must be a positive integer");
   }
@@ -204,6 +243,7 @@ export async function arena(args: Record<string, string | boolean>): Promise<voi
       {
         run_id: runId,
         ruleset: "laplace-8x8-v1",
+        prompt_rev: PROMPT_REV,
         team_a: specA,
         team_b: specB,
         games,
@@ -334,7 +374,7 @@ async function main(): Promise<void> {
     }
   } else {
     console.log(
-      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench regret <runDir> [--oracle product-cpu:cpu-v4:level_5]  (offline per-move regret vs product oracle)\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens only; checked before each turn\n  --turn-timeout-ms N      shared across both attempts in a turn (default 300000)\n  --max-plies N            default 100 (canonical cap for laplace-8x8-v1 matches)\n\nproduct CPU (arena + regret):\n  --product-repo <path>    product checkout (or env LAPLACE_PRODUCT_REPO)\n  --product-commit <sha>   required commit pin (or env LAPLACE_PRODUCT_COMMIT)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | product-cpu:<policy>:<level_1..5> | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
+      "usage:\n  laplacebench arena --team-a <spec> --team-b <spec> [--games N] [--swap] [--seed N] [--max-plies N] [--output-token-budget N] [--turn-timeout-ms N]\n  laplacebench summarize <runDir>\n  laplacebench regret <runDir> [--oracle product-cpu:cpu-v4:level_5]  (offline per-move regret vs product oracle)\n  laplacebench export-web <runDir> [--out <dir>]   (verify + export replay JSON)\n  laplacebench verify <runDir...>                  (deterministic replay verification)\n  laplacebench standings <runDir...> [--out <md>]  (aggregate standings table)\n\nmatch resources:\n  --output-token-budget N  per team/game, in-game output tokens; default 250000 for LLM matches (canonical envelope), none for baseline-only\n  --turn-timeout-ms N      shared across both attempts in a turn; default 1200000 for LLM matches (backstop), 300000 otherwise\n  --max-plies N            default 100 (canonical cap for laplace-8x8-v1 matches)\n\nproduct CPU (arena + regret):\n  --product-repo <path>    product checkout (or env LAPLACE_PRODUCT_REPO)\n  --product-commit <sha>   required commit pin (or env LAPLACE_PRODUCT_COMMIT)\n\nagent specs: random | greedy | chaos | takeshi | takeshi:dN | product-cpu:<policy>:<level_1..5> | anthropic:<model> | claude-cli[:<model>] | codex-cli[:<model>]\n  (claude-cli/codex-cli run under your Claude/ChatGPT subscription — no API key)"
     );
     process.exitCode = 1;
   }

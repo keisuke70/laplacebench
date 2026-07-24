@@ -51,3 +51,31 @@ direction trace: `docs/interrogation/adjudications/freeze-draw-rules.md`)。
 - 過去の anchor-ladder-v1(cap 60/150/300)は遡及変更しない
   (ドキュメントに cap 明記済み)。d2-vs-d3 未解決事項の再測から
   正準 cap 100 を使う。
+
+## トークン封筒(暫定確定 — 2026-07-24 追加、プロンプト世代 p2)
+
+- **構造(凍結)**: 公平性の封筒は出力トークン建て(思考込み、
+  手番前 admission 検査、超過で以後自動パス、`token_budget` 理由で記録)。
+  封筒はモデルに開示する(システム指示+観測 JSON の
+  `output_token_budget` / `output_tokens_used`、ルールブック §8)。
+  壁時計はハング対策バックストップに降格(LLM 対局デフォルト 1200 秒、
+  没収規則自体は不変、レイテンシは記録)。プロンプト世代ラベル
+  `p2-token-budget` を run.json / game_start に記録し、正準ラン比較は
+  同世代内に限定する。
+- **値(暫定確定)**: 250,000 output tokens/チーム/局。
+  根拠実測(2026-07-24): パイロット v1 の消費は haiku ~105k/局・
+  sonnet ~170k・opus ~190k。壁時計降格後は heavy thinker
+  (opus 実測 14.5–19k tokens/手)に対して実際に発火する拘束であり、
+  それは §4-7 の「等トークン封筒」という公平性定義そのもの
+  (トークン配分効率はモデル自身の選択として測定対象)。
+- **見直し条件(v1 本凍結前)**: (a) パイロットでの budget/horizon
+  消化状況、(b) opus 再走で予算発火が対局の大半を自動パス化する水準か
+  (budget-pass turns > admitted turns の対局が過半なら値の見直し提案)。
+- **判定(2026-07-25、opus vs level_3 再走 2局)**: budget-pass turns は
+  両局とも 0(admitted 28/15)で判定規則により **250k を再確認(accept)**。
+  タイムアウト没収は 0(旧プロトコル比 9→0)。消費は 249,519(99.8%)/
+  219,124(87.6%)で、250k は opus 級 heavy thinker の実効的拘束スケール
+  ちょうどに位置する(緩くもなく、対局を切り詰める観測もまだ無い)。
+  詳細は docs/pilot-stage05-v1.md の Addendum 2026-07-25。
+- 背景の実測分解(opus 遅延調査): スループット 21–51 tok/s ×
+  思考 14.5k tok/手(96% 隠れ思考、中盤 19k)≈ 290 秒/手 ≈ 旧 300 秒壁。

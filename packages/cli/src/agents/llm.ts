@@ -1,7 +1,6 @@
 import "../env";
 import Anthropic from "@anthropic-ai/sdk";
-import { observation } from "../engine";
-import { buildInstructions, extractMove, turnMessage } from "../prompt";
+import { buildInstructions, extractMove, observationFromInput, turnMessage } from "../prompt";
 import type { Agent, AgentReply, TeamId, TurnInput } from "../types";
 import { normalizeAnthropicUsage } from "../usage";
 
@@ -32,21 +31,20 @@ export function anthropicAgent(opts: { model: string }): Agent {
   return {
     name: `anthropic:${model}`,
     usageProfile: { provider: "anthropic", source: "anthropic-api" },
-    startGame(team: TeamId) {
+    startGame() {
       messages = [];
-      system = buildInstructions(team);
+      system = "";
       started = false;
     },
     async act(input: TurnInput): Promise<AgentReply> {
-      const obsJson = JSON.stringify(
-        observation(
-          input.state,
-          input.ply,
-          input.maxPlies,
-          input.team,
-          input.recent
-        )
-      );
+      // Built lazily on the first act: match-resource disclosure (token
+      // budget) only exists on TurnInput, not at startGame time.
+      if (!system) {
+        system = buildInstructions(input.team, {
+          outputTokenBudget: input.outputTokenBudget,
+        });
+      }
+      const obsJson = JSON.stringify(observationFromInput(input));
       const userText = turnMessage(
         obsJson,
         input.attempt,

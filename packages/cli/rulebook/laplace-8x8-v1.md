@@ -142,6 +142,10 @@ A team wins immediately when either condition holds:
   A color whose only pieces are gone is skipped from then on.
 - If the game reaches the maximum ply limit stated at game start, it
   ends as a draw.
+- If your team has an output-token budget (stated at game start), every
+  token you produce — including hidden thinking — counts against it.
+  When it is exhausted, your remaining turns are passed automatically,
+  and consecutive automatic passes eliminate colors like any other pass.
 - If the exact same game situation (board including Void status, the
   color about to act, every color's accumulated losses, eliminations,
   and pending forfeit counts) occurs for the third time, the game ends

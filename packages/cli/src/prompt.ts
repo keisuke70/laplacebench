@@ -1,6 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Move, TeamId } from "./types";
+import { observation } from "./engine";
+import type { Move, TeamId, TurnInput } from "./types";
+
+/**
+ * Prompt generation label. Canonical-run comparisons are valid only within
+ * one generation (same discipline as the regret oracle generation).
+ * p2: token-budget disclosure added (docs/plans/2026-07-24-token-budget.md).
+ */
+export const PROMPT_REV = "p2-token-budget";
 
 const RULEBOOK = fs.readFileSync(
   path.join(__dirname, "..", "rulebook", "laplace-8x8-v1.md"),
@@ -12,9 +20,15 @@ const RULEBOOK = fs.readFileSync(
  * prompt by the API adapter and as the first user-message preamble by the
  * subscription-CLI adapters, so all three tracks see identical rules text.
  */
-export function buildInstructions(team: TeamId): string {
+export function buildInstructions(
+  team: TeamId,
+  opts?: { outputTokenBudget?: number }
+): string {
   const colors = team === "A" ? "Red and Yellow" : "Blue and Green";
   const enemy = team === "A" ? "Blue and Green" : "Red and Yellow";
+  const budgetLine = opts?.outputTokenBudget
+    ? `\n- Your team has a total output-token budget of ${opts.outputTokenBudget} for the whole game (thinking included). When it is exhausted, your remaining turns are passed automatically — budget your thinking.`
+    : "";
   return `You are playing the board game LAPLACE as Team ${team}, controlling BOTH the ${colors} colors for the entire game. Your opponent controls ${enemy}. The complete rulebook follows; it is the only rules authority.
 
 ${RULEBOOK}
@@ -29,9 +43,30 @@ ${RULEBOOK}
   {"move": {"from": {"row": R, "col": C}, "to": {"row": R, "col": C}}}
 
 - You may think out loud and keep notes or plans in your reply before the JSON; this text stays in the conversation and is a good place to accumulate strategy across turns. The LAST valid JSON object in your reply is taken as your move.
-- If your reply is malformed or the move is illegal, you get exactly one corrective chance with an error code; a second failure forfeits the turn, and two consecutive forfeits eliminate the acting color.
+- If your reply is malformed or the move is illegal, you get exactly one corrective chance with an error code; a second failure forfeits the turn, and two consecutive forfeits eliminate the acting color.${budgetLine}
 
 Play to win.`;
+}
+
+/**
+ * Observation JSON for a turn — the single construction path shared by all
+ * LLM adapters (API, claude-cli, codex-cli), so match-resource disclosure
+ * stays identical across tracks by construction. Budget fields are present
+ * exactly when the match has a token envelope.
+ */
+export function observationFromInput(input: TurnInput): object {
+  const base = observation(
+    input.state,
+    input.ply,
+    input.maxPlies,
+    input.team,
+    input.recent
+  ) as Record<string, unknown>;
+  if (input.outputTokenBudget !== undefined) {
+    base.output_token_budget = input.outputTokenBudget;
+    base.output_tokens_used = input.outputTokensUsed ?? 0;
+  }
+  return base;
 }
 
 /** Extract the last valid move JSON from free-form model text. */

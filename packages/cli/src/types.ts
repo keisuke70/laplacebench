@@ -40,6 +40,11 @@ export interface TurnInput {
   maxPlies: number;
   /** Absolute wall-clock deadline shared by all attempts in this game turn. */
   deadlineAtMs: number;
+  /** Team's whole-game output-token envelope (admission-checked). */
+  outputTokenBudget?: number;
+  /** Output tokens the team has already spent (same ledger the admission
+   * check reads, so disclosure and enforcement always agree). */
+  outputTokensUsed?: number;
 }
 
 export const MODEL_USAGE_SCHEMA = "laplace-model-usage-v1" as const;
